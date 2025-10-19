@@ -9,7 +9,6 @@ import java.util.Set;
 @NoArgsConstructor @AllArgsConstructor
 public class AccountDTO {
     private String accountId;
-    private String username;
     private String email;
     private String status;
     private LocalDateTime createdAt;

@@ -1,7 +1,9 @@
 package com.daita.datn.services.implement;
 
 import com.daita.datn.enums.ErrorCode;
+import com.daita.datn.enums.RoleType;
 import com.daita.datn.exceptions.AppException;
+import com.daita.datn.models.dto.AccountDTO;
 import com.daita.datn.models.dto.auth.*;
 import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.entities.auth.RedisToken;
@@ -73,13 +75,54 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    public void forgotPassword(ForgotPasswordDTO resendOtpDTO) {
+
+    }
+
+    @Override
+    public void verifyOtp(OtpVerificationDTO otpVerificationDTO) {
+
+    }
+
+    @Override
+    public void updatePassword(UpdatePasswordDTO updatePasswordDTO) {
+
+    }
+
+    @Override
+    public Account findByEmail(String email) {
+        return null;
+    }
+
+    @Override
+    public void verifyRegistrationByOtp(OtpVerificationDTO otpVerificationDTO) {
+
+    }
+
+    @Override
+    public boolean existsByEmail(String email) {
+        return false;
+    }
+
+    @Override
+    public boolean existsByRole(RoleType roleType) {
+        return false;
+    }
+
+    @Override
+    public void save(Account account) {
+        accountRepository.save(account);
+    }
+
+    @Override
     public void register(RegisterRequestDTO requestDTO) {
-        if (accountRepository.existsByUsername(requestDTO.getUsername()))
+        if (accountRepository.existsByEmail(requestDTO.getEmail()))
             throw new AppException(ErrorCode.RESOURCE_ALREADY_EXISTS, "User ");
-        Account account = new Account();
-        account.setUsername(requestDTO.getUsername());
-        account.setEmail(requestDTO.getEmail());
-        account.setPassword(passwordEncoder.encode(requestDTO.getPassword()));
+        Account account = Account.builder()
+                .email(requestDTO.getEmail())
+                .password(passwordEncoder.encode(requestDTO.getPassword()))
+                .build();
+                new Account();
         accountRepository.save(account);
     }
 

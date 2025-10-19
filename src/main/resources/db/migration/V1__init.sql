@@ -2,7 +2,7 @@
 -- VERSION 1 - JOB PORTAL DATABASE INITIALIZATION
 -- ===========================================
 -- Author : Tu Anh Dai
--- Date   : 2025-10-18
+-- Date   : 2025-10-19
 -- Description:
 --   - Module 1: AUTH (Accounts, Roles, Permissions)
 --   - Module 2: JOB PORTAL (JobSeekers, Recruiters, Companies, Jobs, Applications, AI)
@@ -14,7 +14,6 @@
 -- =====================
 CREATE TABLE accounts (
                           account_id VARCHAR(36) PRIMARY KEY,
-                          username VARCHAR(50) NOT NULL UNIQUE,
                           email VARCHAR(100) NOT NULL UNIQUE,
                           password VARCHAR(255) NOT NULL,
                           last_login DATETIME,
@@ -287,7 +286,6 @@ CREATE TABLE ai_logs (
 -- INDEXES
 -- =====================
 CREATE INDEX idx_account_email ON accounts(email);
-CREATE INDEX idx_account_username ON accounts(username);
 CREATE INDEX idx_company_name ON companies(company_name);
 CREATE INDEX idx_job_title ON jobs(title);
 CREATE INDEX idx_application_status ON applications(status);

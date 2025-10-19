@@ -26,9 +26,6 @@ public class Account extends BaseEntity implements UserDetails {
     @Column(name = "account_id", nullable = false, columnDefinition = "VARCHAR(36)")
     private String accountId;
 
-    @Column(nullable = false, unique = true, length = 50)
-    private String username;
-
     @Column(nullable = false, unique = true, length = 100)
     private String email;
 
@@ -55,6 +52,11 @@ public class Account extends BaseEntity implements UserDetails {
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of();
+    }
+
+    @Override
+    public String getUsername() {
+        return email;
     }
 
     @Override

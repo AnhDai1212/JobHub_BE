@@ -15,6 +15,6 @@ public class RoleServiceImpl implements RoleService {
 
     @Override
     public Optional<Role> getByType(RoleType roleType) {
-        return roleRepository.findByName(roleType);
+        return roleRepository.findRoleByRoleName(roleType.name());
     }
 }

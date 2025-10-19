@@ -15,8 +15,8 @@ public class UserDetailServiceCustomizer implements UserDetailsService {
 
     private final AccountRepository accountRepository;
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        return accountRepository.findByUsername(username).orElseThrow(
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        return accountRepository.findByEmail(email).orElseThrow(
                 ()-> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Account "));
     }
 }

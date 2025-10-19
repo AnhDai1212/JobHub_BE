@@ -1,11 +1,11 @@
 spring:
   application:
-    name: DATN
+    name: ${SPRING_APPLICATION_NAME:JobHub}
 
   datasource:
-    url: jdbc:mysql://localhost:3306/job_hub?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
-    username: root
-    password: 402225
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:job_hub}?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -18,10 +18,13 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: ${SERVER_PORT:8080}
+
 jwt:
-#  signerkey: ${JWT_SIGNER_KEY}
-  signerkey: 380fac2c851b0d80eb05d44819707b4a8f7d694db5fd3222df6bfe2b47b1c3c51602cba037475868c408dd72afccceaf70ccb7c86930135420412a1cd7be3317
-  access-token-expiration: 3600000
-  refresh-token-expiration: 604800000
+  signerkey: ${JWT_SIGNER_KEY}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:3600000}
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000}

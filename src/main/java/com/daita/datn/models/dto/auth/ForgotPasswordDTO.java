@@ -1,4 +1,4 @@
-package tipone.buone.api.vehiclemanagement.models.dto.auth;
+package com.daita.datn.models.dto.auth;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
