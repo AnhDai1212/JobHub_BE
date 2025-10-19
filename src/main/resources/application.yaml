@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: DATN
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/job_hub?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+    username: root
+    password: 402225
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+
+  flyway:
+    enabled: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+jwt:
+#  signerkey: ${JWT_SIGNER_KEY}
+  signerkey: 380fac2c851b0d80eb05d44819707b4a8f7d694db5fd3222df6bfe2b47b1c3c51602cba037475868c408dd72afccceaf70ccb7c86930135420412a1cd7be3317
+  access-token-expiration: 3600000
+  refresh-token-expiration: 604800000
