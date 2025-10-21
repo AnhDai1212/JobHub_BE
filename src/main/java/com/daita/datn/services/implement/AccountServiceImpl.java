@@ -3,18 +3,19 @@ package com.daita.datn.services.implement;
 import com.daita.datn.enums.ErrorCode;
 import com.daita.datn.enums.RoleType;
 import com.daita.datn.exceptions.AppException;
-import com.daita.datn.models.dto.AccountDTO;
 import com.daita.datn.models.dto.auth.*;
 import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.entities.auth.RedisToken;
+import com.daita.datn.models.entities.auth.Role;
 import com.daita.datn.models.mappers.AccountMapper;
 import com.daita.datn.repositories.AccountRepository;
 import com.daita.datn.repositories.RedisTokenRepository;
-import com.daita.datn.services.AccountService;
+import com.daita.datn.services.*;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,7 +24,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
+import java.time.Duration;
 import java.util.Date;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -37,15 +41,24 @@ public class AccountServiceImpl implements AccountService {
     JwtServiceImpl jwtService;
     RedisTokenRepository redisTokenRepository;
     AccountMapper accountMapper;
+    OtpService otpService;
+    RoleService roleService;
+    RedisTemplate<String, Object> redisTemplate;
+    EmailService emailService;
 
     @Override
     public AuthenticationDTO login(LoginRequestDTO request) throws UsernameNotFoundException {
-        UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword());
+        UsernamePasswordAuthenticationToken token =
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
         Authentication authentication = authenticationManager.authenticate(token);
 
         Account account = (Account) authentication.getPrincipal();
-        TokenPayload accessPayloadToken = jwtService.generateAccessToken(account);
-        TokenPayload refreshPayloadToken = jwtService.generateRefreshToken(account);
+        Set<RoleType> roleNames = account.getRoles().stream()
+                .map(Role::getRoleName)
+                .collect(Collectors.toSet());
+
+        TokenPayload accessPayloadToken = jwtService.generateAccessToken(account.getAccountId(), account.getEmail(), roleNames);
+        TokenPayload refreshPayloadToken = jwtService.generateRefreshToken(account.getAccountId());
 
         return AuthenticationDTO.builder()
                 .accessToken(accessPayloadToken.getToken())
@@ -71,59 +84,125 @@ public class AccountServiceImpl implements AccountService {
                 .build();
 
         redisTokenRepository.save(redisToken);
-        log.info("logout successfully");
+        log.info("Logout successfully");
     }
 
     @Override
-    public void forgotPassword(ForgotPasswordDTO resendOtpDTO) {
+    public void forgotPassword(ForgotPasswordDTO dto) {
+        String email = dto.getEmail();
+        findByEmail(email);
 
+        if (otpService.isOtpLimitExceeded(email)) {
+            throw new AppException(ErrorCode.OTP_LIMIT_EXCEEDED, "Daily resend limit exceeded");
+        }
+
+        otpService.deleteOtp(email);
+        otpService.increaseRequestCount(email);
+
+        emailService.sendOtpByEmail(email);
+        log.info("OTP sent to {}", email);
     }
 
     @Override
     public void verifyOtp(OtpVerificationDTO otpVerificationDTO) {
+        String email = otpVerificationDTO.getEmail();
+        String cachedOtp = otpService.getOtp(email);
 
+        if (cachedOtp != null && otpService.verifyOtp(otpVerificationDTO.getOtp(), cachedOtp)) {
+            otpService.deleteOtp(email);
+
+            redisTemplate.opsForValue().set("verified:" + email, true, Duration.ofMinutes(10));
+            log.info("OTP verified successfully for {}", email);
+        } else {
+            throw new AppException(ErrorCode.INVALID_OTP, "Invalid or expired OTP");
+        }
     }
 
     @Override
     public void updatePassword(UpdatePasswordDTO updatePasswordDTO) {
+        String email = updatePasswordDTO.getEmail();
 
+        Boolean verified = (Boolean) redisTemplate.opsForValue().get("verified:" + email);
+        if (verified == null || !verified) {
+            throw new AppException(ErrorCode.OTP_NOT_VERIFIED);
+        }
+
+        Account account = findByEmail(email);
+        String password = passwordEncoder.encode(updatePasswordDTO.getNewPassword());
+        account.setPassword(password);
+        accountRepository.save(account);
+
+        redisTemplate.delete("verified:" + email);
+        log.info("Password updated successfully for {}", email);
     }
 
     @Override
-    public Account findByEmail(String email) {
-        return null;
+    public void register(RegisterRequestDTO requestDTO) {
+        String email = requestDTO.getEmail();
+
+        if (accountRepository.existsByEmail(email)) {
+            throw new AppException(ErrorCode.RESOURCE_ALREADY_EXISTS, "Email already exists");
+        }
+
+        if (otpService.isOtpLimitExceeded(email)) {
+            throw new AppException(ErrorCode.OTP_LIMIT_EXCEEDED, "OTP limit reached");
+        }
+
+        String hashedPassword = passwordEncoder.encode(requestDTO.getPassword());
+        requestDTO.setPassword(hashedPassword);
+        redisTemplate.opsForValue().set("register:" + email, requestDTO, Duration.ofMinutes(10));
+
+        emailService.sendOtpByEmail(email);
+        otpService.increaseRequestCount(email);
+        log.info("Registration OTP sent to {}", email);
     }
 
     @Override
     public void verifyRegistrationByOtp(OtpVerificationDTO otpVerificationDTO) {
+        String email = otpVerificationDTO.getEmail();
+        RegisterRequestDTO cachedRegistration =
+                (RegisterRequestDTO) redisTemplate.opsForValue().get("register:" + email);
 
+        if (cachedRegistration == null) {
+            otpService.deleteOtp(email);
+            throw new AppException(ErrorCode.INVALID_OTP, "Registration expired");
+        }
+
+        String cachedOtp = otpService.getOtp(email);
+        if (cachedOtp == null || !otpService.verifyOtp(otpVerificationDTO.getOtp(), cachedOtp)) {
+            throw new AppException(ErrorCode.INVALID_OTP, "Invalid registration OTP");
+        }
+
+        Role userRole = roleService.getByType(RoleType.JOB_SEEKER)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Role JOB_SEEKER not found"));
+
+        Account account = accountMapper.mapRegisterDtoToEntity(cachedRegistration, userRole);
+        accountRepository.save(account);
+
+        redisTemplate.delete("register:" + email);
+        otpService.deleteOtp(email);
+
+        log.info("Account registered successfully for {}", email);
+    }
+
+    @Override
+    public Account findByEmail(String email) {
+        return accountRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Email not found"));
     }
 
     @Override
     public boolean existsByEmail(String email) {
-        return false;
+        return accountRepository.existsByEmail(email);
     }
 
     @Override
     public boolean existsByRole(RoleType roleType) {
-        return false;
+        return accountRepository.existsByRoles_RoleName(roleType);
     }
 
     @Override
     public void save(Account account) {
         accountRepository.save(account);
     }
-
-    @Override
-    public void register(RegisterRequestDTO requestDTO) {
-        if (accountRepository.existsByEmail(requestDTO.getEmail()))
-            throw new AppException(ErrorCode.RESOURCE_ALREADY_EXISTS, "User ");
-        Account account = Account.builder()
-                .email(requestDTO.getEmail())
-                .password(passwordEncoder.encode(requestDTO.getPassword()))
-                .build();
-                new Account();
-        accountRepository.save(account);
-    }
-
 }

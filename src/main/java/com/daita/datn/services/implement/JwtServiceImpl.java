@@ -1,6 +1,7 @@
 package com.daita.datn.services.implement;
 
 import com.daita.datn.enums.ErrorCode;
+import com.daita.datn.enums.RoleType;
 import com.daita.datn.exceptions.AppException;
 import com.daita.datn.models.dto.auth.JwtInfo;
 import com.daita.datn.models.dto.auth.TokenPayload;
@@ -9,6 +10,7 @@ import com.daita.datn.models.entities.auth.RedisToken;
 import com.daita.datn.repositories.AccountRepository;
 import com.daita.datn.repositories.RedisTokenRepository;
 import com.daita.datn.services.JwtService;
+import com.daita.datn.services.RedisService;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
@@ -41,9 +43,11 @@ public class JwtServiceImpl implements JwtService {
 
     private final AccountRepository accountRepository;
 
+    private final RedisService redisService;
+
 
     @Override
-    public TokenPayload generateAccessToken(Account account) {
+    public TokenPayload generateAccessToken(String accountId, String email, Set<RoleType> roleType) {
         JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS512);
 
         Date issueTime = new Date();
@@ -51,7 +55,9 @@ public class JwtServiceImpl implements JwtService {
         String jwtId = UUID.randomUUID().toString();
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
                 .jwtID(jwtId)
-                .subject(account.getUsername())
+                .subject(accountId)
+                .claim("email", email)
+                .claim("role", roleType)
                 .issueTime(issueTime)
                 .expirationTime(expirationTime)
                 .build();
@@ -73,44 +79,12 @@ public class JwtServiceImpl implements JwtService {
                 .build();
     }
 
-//    @Override
-//    public TokenPayload generateRefreshToken(Account account) {
-//        JWSHeader jwsHeader = new JWSHeader(JWSAlgorithm.HS512);
-//
-//        Date issueTime = new Date();
-//        Date expirationTime = new Date(issueTime.getTime() + refreshTokenExpiration);
-//        String jwtId = UUID.randomUUID().toString();
-//
-//        JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
-//                .jwtID(jwtId)
-//                .subject(account.getUsername())
-//                .issueTime(issueTime)
-//                .expirationTime(expirationTime)
-//                .build();
-//
-//        Payload payload = new Payload(jwtClaimsSet.toJSONObject());
-//
-//        JWSObject jwsObject = new JWSObject(jwsHeader, payload);
-//        try {
-//            jwsObject.sign(new MACSigner(secretKey));
-//        } catch (Exception e) {
-//            throw new RuntimeException(e);
-//        }
-//
-//        String token = jwsObject.serialize();
-//        return TokenPayload.builder()
-//                .token(token)
-//                .jwtID(jwtId)
-//                .expiredTime(expirationTime)
-//                .build();
-//    }
-
     @Override
-    public TokenPayload generateRefreshToken(Account account) {
+    public TokenPayload generateRefreshToken(String accountId) {
         String refreshToken = UUID.randomUUID().toString();
-        RedisToken token = redisTokenRepository.save(RedisToken.builder()
+        RedisToken token = redisService.saveToken(RedisToken.builder()
                 .jwtId(refreshToken)
-                .accountId( account.getAccountId())
+                .accountId(accountId)
                 .expiredTime(refreshTokenExpiration / 1000)
                 .build());
 
@@ -132,13 +106,13 @@ public class JwtServiceImpl implements JwtService {
         SignedJWT signedJWT = SignedJWT.parse(token);
 
         Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
-        if(expirationTime.before(new Date())) {
+        if (expirationTime.before(new Date())) {
             return false;
         }
 
         String jwtId = signedJWT.getJWTClaimsSet().getJWTID();
-        Optional<RedisToken> tokenInRedis  = redisTokenRepository.findById(jwtId);
-        if(tokenInRedis.isPresent()) {
+        Optional<RedisToken> tokenInRedis = redisService.findById(jwtId);
+        if (tokenInRedis.isPresent()) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
         return signedJWT.verify(new MACVerifier(secretKey));
@@ -159,24 +133,26 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public Account  verifyRefreshToken(String refreshToken) {
+    public Account verifyRefreshToken(String refreshToken) {
         System.out.println("Refresh Token: " + refreshToken);
-        if(refreshToken == null || refreshToken.isBlank()) {
+        if (refreshToken == null || refreshToken.isBlank()) {
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
-        RedisToken token = redisTokenRepository.findById(refreshToken)
+        RedisToken token = redisService.findById(refreshToken)
                 .orElseThrow(() -> new AppException(ErrorCode.INVALID_TOKEN));
         return accountRepository.findById(token.getAccountId())
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
     }
+
     @Override
     public void revokeRefreshToken(String refreshToken) {
         System.out.println("Trying to revoke token: " + refreshToken);
-        System.out.println("Exists in Redis? " + redisTokenRepository.existsById(refreshToken));
-        if (redisTokenRepository.existsById(refreshToken)) {
-            redisTokenRepository.deleteById(refreshToken);
+        System.out.println("Exists in Redis? " + redisService.existsById(refreshToken));
+        if (redisService.existsById(refreshToken)) {
+            redisService.deleteById(refreshToken);
         }
     }
+
     @Override
     public String extractId(String token) {
         return "";

@@ -1,5 +1,6 @@
 package com.daita.datn.models.entities.auth;
 
+import com.daita.datn.enums.RoleType;
 import com.daita.datn.models.entities.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,8 +20,9 @@ public class Role extends BaseEntity {
     @Column(name = "role_id")
     private Integer roleId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "role_name", nullable = false, unique = true, length = 50)
-    private String roleName;
+    private RoleType roleName;
 
     @Column(name = "role_description", length = 100)
     private String roleDescription;

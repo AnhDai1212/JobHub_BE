@@ -17,11 +17,10 @@ public abstract class BaseEntity {
     private String id;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "create_date", nullable = false, updatable = false)
+    private LocalDateTime createDate;
 
     @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
+    @Column(name = "modified_date", nullable = false)
+    private LocalDateTime modifiedDate;
 }

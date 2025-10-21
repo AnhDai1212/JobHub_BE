@@ -2,20 +2,16 @@ package com.daita.datn.controllers;
 
 import com.daita.datn.common.base.ApiResponse;
 import com.daita.datn.common.constants.MessageConstant;
-import com.daita.datn.enums.ErrorCode;
-import com.daita.datn.exceptions.AppException;
 import com.daita.datn.models.dto.auth.LoginRequestDTO;
+import com.daita.datn.models.dto.auth.OtpVerificationDTO;
 import com.daita.datn.models.dto.auth.RegisterRequestDTO;
 import com.daita.datn.models.dto.auth.TokenDTO;
-import com.daita.datn.models.mappers.AccountMapper;
 import com.daita.datn.services.AccountService;
 import com.daita.datn.services.AuthService;
 import com.nimbusds.jose.JOSEException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.token.TokenService;
 import org.springframework.web.bind.annotation.*;
-
 import java.io.IOException;
 import java.text.ParseException;
 
@@ -61,6 +57,16 @@ public class AuthController {
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.TOKEN_REFRESH_SUCCESS)
                 .data(tokenDTO)
+                .build();
+    }
+
+    @PostMapping("/verify-registration")
+    public ApiResponse verifyRegistration(@RequestBody OtpVerificationDTO otpVerificationDTO) {
+        accountService.verifyRegistrationByOtp(otpVerificationDTO);
+        return ApiResponse.builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.VERIFY_REGISTRATION_SUCCESS)
                 .build();
     }
 }

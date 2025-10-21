@@ -2,7 +2,6 @@ package com.daita.datn.models.dto.auth;
 
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
 import java.io.Serializable;
 import java.util.Date;
 

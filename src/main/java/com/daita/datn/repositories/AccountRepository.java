@@ -14,6 +14,6 @@ public interface AccountRepository extends JpaRepository<Account, String> {
     Optional<Account> findByEmail(String email);
     boolean existsByEmail(String email);
     boolean existsByRoles_RoleName(RoleType roleType);
-//    @Query("SELECT a FROM accounts a JOIN FETCH a.roles WHERE a.email = :email")
-//    Optional<Account> findByEmailWithRoles(@Param("email") String email);
+    @Query("SELECT a FROM Account a JOIN FETCH a.roles WHERE a.email = :email")
+    Optional<Account> findByEmailWithRoles(@Param("email") String email);
 }

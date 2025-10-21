@@ -14,9 +14,10 @@ import org.springframework.stereotype.Service;
 public class UserDetailServiceCustomizer implements UserDetailsService {
 
     private final AccountRepository accountRepository;
+
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        return accountRepository.findByEmail(email).orElseThrow(
-                ()-> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Account "));
+        return accountRepository.findByEmailWithRoles(email).orElseThrow(
+                () -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Account "));
     }
 }

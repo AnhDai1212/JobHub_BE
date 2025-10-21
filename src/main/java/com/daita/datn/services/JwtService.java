@@ -1,5 +1,6 @@
 package com.daita.datn.services;
 
+import com.daita.datn.enums.RoleType;
 import com.daita.datn.models.dto.auth.JwtInfo;
 import com.daita.datn.models.dto.auth.TokenPayload;
 import com.daita.datn.models.entities.auth.Account;
@@ -10,8 +11,8 @@ import java.text.ParseException;
 import java.util.Set;
 
 public interface JwtService {
-    TokenPayload generateAccessToken(Account account);
-    TokenPayload generateRefreshToken(Account account);
+    TokenPayload generateAccessToken(String accountId, String email, Set<RoleType> roleNames);
+    TokenPayload generateRefreshToken(String accountId);
     Account verifyRefreshToken(String refreshToken);
     void revokeRefreshToken(String refreshToken);
     String getToken(HttpServletRequest request);

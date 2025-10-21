@@ -1,7 +1,5 @@
 package com.daita.datn.services.implement;
 
-
-import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.entities.auth.RefreshToken;
 import com.daita.datn.services.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
@@ -10,10 +8,6 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class RefreshTokenServiceImpl implements RefreshTokenService {
-    @Override
-    public String generateRefreshToken(Account account) {
-        return "";
-    }
 
     @Override
     public RefreshToken findByRefreshToken(String refreshToken) {
