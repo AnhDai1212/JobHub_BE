@@ -20,6 +20,7 @@ public class Constant {
     public static final String STATUS_UNAUTHORIZED = "UNAUTHORIZED";
 
     public static final String EMAIL_REGEX = "^[a-zA-Z0-9._]+@[a-zA-Z0-9.]+\\.[a-zA-Z]{2,}$";
-    public static final String PASSWORD_REGEX = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)[A-Za-z\\d]{8,50}$";
+    public static final String PASSWORD_REGEX =
+            "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,50}$";
     public static final String PHONE_REGEX = "^\\d{4,20}$";
 }

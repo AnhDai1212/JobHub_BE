@@ -4,9 +4,11 @@ import com.daita.datn.enums.ErrorCode;
 import com.daita.datn.enums.RoleType;
 import com.daita.datn.exceptions.AppException;
 import com.daita.datn.models.dto.auth.JwtInfo;
+import com.daita.datn.models.dto.auth.TokenDTO;
 import com.daita.datn.models.dto.auth.TokenPayload;
 import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.entities.auth.RedisToken;
+import com.daita.datn.models.entities.auth.Role;
 import com.daita.datn.repositories.AccountRepository;
 import com.daita.datn.repositories.RedisTokenRepository;
 import com.daita.datn.services.JwtService;
@@ -26,6 +28,7 @@ import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -38,8 +41,6 @@ public class JwtServiceImpl implements JwtService {
 
     @Value("${jwt.refresh-token-expiration}")
     private long refreshTokenExpiration;
-
-    private final RedisTokenRepository redisTokenRepository;
 
     private final AccountRepository accountRepository;
 
@@ -97,11 +98,6 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
-    public String getToken(HttpServletRequest request) {
-        return "";
-    }
-
-    @Override
     public boolean verifyToken(String token) throws ParseException, JOSEException {
         SignedJWT signedJWT = SignedJWT.parse(token);
 
@@ -133,6 +129,18 @@ public class JwtServiceImpl implements JwtService {
     }
 
     @Override
+    public TokenDTO generateFor(Account account) {
+        var roles = account.getRoles()
+                .stream().map(Role::getRoleName).collect(Collectors.toSet());
+        var accessPayloadToken = generateAccessToken(account.getAccountId(), account.getEmail(), roles);
+        var refreshPayloadToken = generateRefreshToken(account.getAccountId());
+        return TokenDTO.builder()
+                .accessToken(accessPayloadToken.getToken())
+                .refreshToken(refreshPayloadToken.getToken())
+                .build();
+    }
+
+    @Override
     public Account verifyRefreshToken(String refreshToken) {
         System.out.println("Refresh Token: " + refreshToken);
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -151,20 +159,5 @@ public class JwtServiceImpl implements JwtService {
         if (redisService.existsById(refreshToken)) {
             redisService.deleteById(refreshToken);
         }
-    }
-
-    @Override
-    public String extractId(String token) {
-        return "";
-    }
-
-    @Override
-    public Set<String> extractRoles(String token) {
-        return Set.of();
-    }
-
-    @Override
-    public String extractEmail(String token) {
-        return "";
     }
 }

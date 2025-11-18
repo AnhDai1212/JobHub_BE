@@ -34,7 +34,6 @@ public class OtpServiceImpl implements OtpService {
         try {
             String otp = Util.randomNumbers(6);
             redisTemplate.opsForValue().set(otpKey(email), otp, OTP_TTL);
-//            increaseRequestCount(email);
             return otp;
         } catch (Exception e) {
             throw new AppException(ErrorCode.OTP_SEND_FAILED);

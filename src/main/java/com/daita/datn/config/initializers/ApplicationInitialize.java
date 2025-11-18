@@ -26,7 +26,6 @@ public class ApplicationInitialize implements CommandLineRunner {
     private final AccountService accountService;
     private final RoleService roleService;
     private final PasswordService passwordService;
-    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) throws Exception {
@@ -38,7 +37,7 @@ public class ApplicationInitialize implements CommandLineRunner {
             Role role = roleService.getByType(RoleType.ADMIN).orElse(null);
             Account account = Account.builder()
                     .email(ADMIN_EMAIL)
-                    .password(passwordEncoder.encode(ADMIN_PASSWORD))
+                    .password(passwordService.encryptPassword(ADMIN_PASSWORD))
                     .status(AccountStatus.ACTIVE)
                     .roles(Set.of(Objects.requireNonNull(role)))
                     .build();

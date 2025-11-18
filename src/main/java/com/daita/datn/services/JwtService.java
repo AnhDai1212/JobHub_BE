@@ -2,6 +2,7 @@ package com.daita.datn.services;
 
 import com.daita.datn.enums.RoleType;
 import com.daita.datn.models.dto.auth.JwtInfo;
+import com.daita.datn.models.dto.auth.TokenDTO;
 import com.daita.datn.models.dto.auth.TokenPayload;
 import com.daita.datn.models.entities.auth.Account;
 import com.nimbusds.jose.JOSEException;
@@ -15,11 +16,7 @@ public interface JwtService {
     TokenPayload generateRefreshToken(String accountId);
     Account verifyRefreshToken(String refreshToken);
     void revokeRefreshToken(String refreshToken);
-    String getToken(HttpServletRequest request);
     boolean verifyToken(String token) throws ParseException, JOSEException;
     JwtInfo parseToken(String token) throws ParseException;
-    String extractId(String token);
-    Set<String> extractRoles(String token);
-    String extractEmail(String token);
-
+    TokenDTO generateFor(Account account);
 }

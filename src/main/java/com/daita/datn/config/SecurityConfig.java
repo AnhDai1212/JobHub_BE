@@ -25,13 +25,13 @@ public class SecurityConfig {
     private final UserDetailsService userDetailsService;
     private final JwtDecoderConfiguration jwtDecoderConfiguration;
     public static final String[] PUBLIC_ENDPOINTS = {
-            "/auth/login",
-            "/auth/register",
-            "/auth/forgot-password",
-            "/auth/reset-password",
-            "/auth/verify-otp",
-            "/auth/refresh-token",
-            "/auth/verify-registration",
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/verify-otp",
+            "/api/auth/refresh-token",
+            "/api/auth/verify-registration",
     };
 
     @Bean
@@ -63,6 +63,7 @@ public class SecurityConfig {
         DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
         authenticationProvider.setUserDetailsService(userDetailsService);
         authenticationProvider.setPasswordEncoder(passwordEncoder());
+        authenticationProvider.setHideUserNotFoundExceptions(false);
 
         return new ProviderManager(authenticationProvider);
     }

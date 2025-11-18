@@ -3,7 +3,7 @@ package com.daita.datn.common.constants;
 public class MessageConstant {
     public static final String ERROR_NOT_FOUND_PREFIX_ENTITY = "Not found prefix entity";
     public static final String INVALID_EMAIL = "Email cannot be empty and must be valid.";
-    public static final String INVALID_PASSWORD = "Password must be 8–50 chars with uppercase, lowercase and number.";
+    public static final String INVALID_PASSWORD = "Password must be 8–50 chars with uppercase, lowercase, number, and special character.";
     public static final String INVALID_USER_NAME = "Username must be between 3-500 characters and contain only letters, numbers and spaces.";
     public static final String INVALID_PHONE = "Phone number must contain only digits and be 4–20 characters long.";
     public static final String INVALID_TAX_NUMBER = "Tax number must be 5–20 characters long and can contain digits and hyphens.";

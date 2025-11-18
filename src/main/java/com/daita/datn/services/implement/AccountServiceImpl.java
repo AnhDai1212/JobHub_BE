@@ -3,6 +3,7 @@ package com.daita.datn.services.implement;
 import com.daita.datn.enums.ErrorCode;
 import com.daita.datn.enums.RoleType;
 import com.daita.datn.exceptions.AppException;
+import com.daita.datn.exceptions.handlers.AuthExceptionTranslator;
 import com.daita.datn.models.dto.auth.*;
 import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.entities.auth.RedisToken;
@@ -16,18 +17,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
 import java.time.Duration;
 import java.util.Date;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -45,26 +43,27 @@ public class AccountServiceImpl implements AccountService {
     RoleService roleService;
     RedisTemplate<String, Object> redisTemplate;
     EmailService emailService;
+    AuthExceptionTranslator authExceptionTranslator;
 
     @Override
-    public AuthenticationDTO login(LoginRequestDTO request) throws UsernameNotFoundException {
-        UsernamePasswordAuthenticationToken token =
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword());
-        Authentication authentication = authenticationManager.authenticate(token);
+    public AuthenticationDTO login(LoginRequestDTO request) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
-        Account account = (Account) authentication.getPrincipal();
-        Set<RoleType> roleNames = account.getRoles().stream()
-                .map(Role::getRoleName)
-                .collect(Collectors.toSet());
+            Account account = (Account) authentication.getPrincipal();
 
-        TokenPayload accessPayloadToken = jwtService.generateAccessToken(account.getAccountId(), account.getEmail(), roleNames);
-        TokenPayload refreshPayloadToken = jwtService.generateRefreshToken(account.getAccountId());
+            TokenDTO tokenPair  = jwtService.generateFor(account);
 
-        return AuthenticationDTO.builder()
-                .accessToken(accessPayloadToken.getToken())
-                .refreshToken(refreshPayloadToken.getToken())
-                .account(accountMapper.toDTO(account))
-                .build();
+            return AuthenticationDTO.builder()
+                    .accessToken(tokenPair.getAccessToken())
+                    .refreshToken(tokenPair.getRefreshToken())
+                    .account(accountMapper.toDTO(account))
+                    .build();
+
+        } catch (AuthenticationException  ex) {
+            throw authExceptionTranslator.translate(ex);
+        }
     }
 
     @Override
@@ -93,7 +92,7 @@ public class AccountServiceImpl implements AccountService {
         findByEmail(email);
 
         if (otpService.isOtpLimitExceeded(email)) {
-            throw new AppException(ErrorCode.OTP_LIMIT_EXCEEDED, "Daily resend limit exceeded");
+            throw new AppException(ErrorCode.OTP_LIMIT_EXCEEDED, "OTP");
         }
 
         otpService.deleteOtp(email);
@@ -114,7 +113,7 @@ public class AccountServiceImpl implements AccountService {
             redisTemplate.opsForValue().set("verified:" + email, true, Duration.ofMinutes(10));
             log.info("OTP verified successfully for {}", email);
         } else {
-            throw new AppException(ErrorCode.INVALID_OTP, "Invalid or expired OTP");
+            throw new AppException(ErrorCode.INVALID_OTP);
         }
     }
 
