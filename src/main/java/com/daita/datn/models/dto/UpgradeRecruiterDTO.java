@@ -12,6 +12,7 @@ public class UpgradeRecruiterDTO {
     private String companyName;
     private String location;
     private String website;
+    private String introduction;
     private String position;
     private String phone;
 }

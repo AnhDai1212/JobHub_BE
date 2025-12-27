@@ -31,7 +31,12 @@ services:
       - redis
     networks:
       - jobhub-net
-
+  cv-parser:
+    build: ./cv-parser-service
+    ports:
+      - "8000:8000"
+    networks:
+      - jobhub-net
 networks:
   jobhub-net:
 

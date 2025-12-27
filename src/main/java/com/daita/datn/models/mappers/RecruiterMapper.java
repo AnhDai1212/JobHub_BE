@@ -41,6 +41,7 @@ public interface RecruiterMapper {
     @Mapping(target = "companyName", source = "companyName")
     @Mapping(target = "location", source = "dto.location")
     @Mapping(target = "website", source = "dto.website")
+    @Mapping(target = "introduction", source = "dto.introduction")
     @Mapping(target = "isApproved", constant = "false")
     Company toCompany(UpgradeRecruiterDTO dto, String companyName);
 
