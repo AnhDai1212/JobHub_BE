@@ -1,0 +1,37 @@
+package com.daita.datn.models.entities;
+
+import jakarta.persistence.*;
+import lombok.*;
+import java.time.LocalDateTime;
+import java.util.Set;
+
+@Entity
+@Table(name = "applications")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Application {
+
+    @Id
+    @Column(name = "application_id", columnDefinition = "VARCHAR(36)")
+    private String applicationId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id", nullable = false)
+    private Job job;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_seeker_id", nullable = false)
+    private JobSeeker jobSeeker;
+
+    @Column(name = "applied_at")
+    private LocalDateTime appliedAt;
+
+    @Column(length = 50)
+    private String status;
+
+    @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ApplicationHistory> histories;
+}
