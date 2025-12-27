@@ -17,4 +17,6 @@ public class CompanyRequestDTO {
 
     @Size(max = 255)
     private String website;
+
+    private String introduction;
 }

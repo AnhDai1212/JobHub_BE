@@ -13,4 +13,5 @@ public class CompanyUpdateDTO {
     private String companyName;
     private String location;
     private String website;
+    private String introduction;
 }

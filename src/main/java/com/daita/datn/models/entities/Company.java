@@ -28,6 +28,10 @@ public class Company extends BaseEntity {
     @Column(length = 255)
     private String website;
 
+    @Lob
+    @Column(name = "introduction")
+    private String introduction;
+
     @Column(name = "avatar_url", length = 255)
     private String avatarUrl;
 
