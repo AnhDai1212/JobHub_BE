@@ -176,14 +176,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private Account createAccountForGoogle(String email) {
-        Role defaultRole = roleService.getByType(RoleType.JOB_SEEKER)
-                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Role"));
         String randomPassword = passwordEncoder.encode(UUID.randomUUID().toString());
         RegisterRequestDTO registerRequest = RegisterRequestDTO.builder()
                 .email(email)
                 .password(randomPassword)
                 .build();
-        Account account = accountMapper.mapRegisterDtoToEntity(registerRequest, defaultRole);
+        Account account = accountMapper.mapRegisterDtoToEntity(registerRequest, null);
         return accountRepository.save(account);
     }
 
