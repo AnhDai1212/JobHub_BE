@@ -15,11 +15,13 @@ import com.daita.datn.models.entities.Application;
 import com.daita.datn.models.entities.ApplicationHistory;
 import com.daita.datn.models.entities.Job;
 import com.daita.datn.models.entities.JobSeeker;
+import com.daita.datn.models.entities.ParsedCv;
 import com.daita.datn.models.entities.auth.Account;
 import com.daita.datn.models.mappers.ApplicationMapper;
 import com.daita.datn.repositories.ApplicationRepository;
 import com.daita.datn.repositories.JobRepository;
 import com.daita.datn.repositories.JobSeekerRepository;
+import com.daita.datn.repositories.ParsedCvRepository;
 import com.daita.datn.services.AccountService;
 import com.daita.datn.services.ApplicationService;
 import java.time.LocalDateTime;
@@ -42,6 +44,7 @@ public class ApplicationServiceImpl implements ApplicationService {
     JobSeekerRepository jobSeekerRepository;
     JobRepository jobRepository;
     ApplicationRepository applicationRepository;
+    ParsedCvRepository parsedCvRepository;
     ApplicationMapper applicationMapper;
 
     @Override
@@ -64,11 +67,14 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new AppException(ErrorCode.RESOURCE_ALREADY_EXISTS, "Application");
         }
 
+        ParsedCv parsedCv = resolveParsedCv(request.getParsedCvId(), jobSeeker);
+
         String applicationId = UUID.randomUUID().toString();
         Application application = applicationMapper.toEntity(
                 applicationId,
                 job,
                 jobSeeker,
+                parsedCv,
                 LocalDateTime.now(),
                 ApplicationStatus.APPLIED.name()
         );
@@ -140,5 +146,20 @@ public class ApplicationServiceImpl implements ApplicationService {
                 .toList();
 
         return new PageListDTO<>(rows, (int) page.getTotalElements());
+    }
+
+    private ParsedCv resolveParsedCv(String parsedCvId, JobSeeker jobSeeker) {
+        if (parsedCvId == null || parsedCvId.isBlank()) {
+            return null;
+        }
+
+        ParsedCv parsedCv = parsedCvRepository.findById(parsedCvId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "ParsedCv"));
+
+        if (!parsedCv.getJobSeeker().getJobSeekerId().equals(jobSeeker.getJobSeekerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        return parsedCv;
     }
 }

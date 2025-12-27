@@ -26,6 +26,10 @@ public class Application {
     @JoinColumn(name = "job_seeker_id", nullable = false)
     private JobSeeker jobSeeker;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parsed_cv_id")
+    private ParsedCv parsedCv;
+
     @Column(name = "applied_at")
     private LocalDateTime appliedAt;
 

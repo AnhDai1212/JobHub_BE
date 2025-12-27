@@ -11,4 +11,5 @@ public class ApplicationDTO {
     private Integer jobSeekerId;
     private LocalDateTime appliedAt;
     private String status;
+    private String parsedCvId;
 }

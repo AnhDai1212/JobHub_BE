@@ -1,7 +1,6 @@
 services:
   redis:
     image: redis:7
-    container_name: redis
     ports:
       - "6379:6379"
     networks:
@@ -9,7 +8,6 @@ services:
 
   mysql:
     image: mysql:8
-    container_name: mysql
     environment:
       MYSQL_ROOT_PASSWORD: "Jobhub123@"
       MYSQL_DATABASE: job_hub
@@ -24,7 +22,6 @@ services:
 
   app:
     build: .
-    container_name: jobhub-app
     ports:
       - "${APP_PORT:-8080}:8080"
     env_file:

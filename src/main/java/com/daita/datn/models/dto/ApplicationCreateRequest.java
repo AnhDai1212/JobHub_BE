@@ -9,4 +9,6 @@ import lombok.Setter;
 public class ApplicationCreateRequest {
     @NotNull
     private Integer jobId;
+
+    private String parsedCvId;
 }

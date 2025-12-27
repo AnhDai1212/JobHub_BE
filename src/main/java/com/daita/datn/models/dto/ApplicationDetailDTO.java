@@ -15,5 +15,7 @@ public class ApplicationDetailDTO {
     private Integer jobSeekerId;
     private LocalDateTime appliedAt;
     private String status;
+    private String parsedCvId;
+    private String parsedCvJson;
     private List<ApplicationHistoryDTO> histories;
 }
