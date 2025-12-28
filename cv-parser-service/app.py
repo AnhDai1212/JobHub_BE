@@ -90,6 +90,14 @@ def _normalize_years_list(values: List[str]) -> List[float]:
     return years
 
 
+def _jaccard(a: List[str], b: List[str]) -> float:
+    set_a = set(str(x).lower().strip() for x in a if x)
+    set_b = set(str(x).lower().strip() for x in b if x)
+    if not set_a or not set_b:
+        return 0.0
+    return len(set_a & set_b) / len(set_a | set_b)
+
+
 def _get_search_results(search_query: str) -> Optional[str]:
     endpoint = (
         "https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&utf8=1"
@@ -195,7 +203,7 @@ async def rank(req: RankRequest):
             if summary:
                 expanded_resume_skills.append(summary)
 
-    if jd_skills:
+    if jd_skills and expanded_resume_skills:
         count = 0
         for skill in jd_skills:
             skill_lower = str(skill).lower()
@@ -204,6 +212,8 @@ async def rank(req: RankRequest):
                     count += 1
                     break
         skills_score = 1 - ((len(jd_skills) - count) / len(jd_skills))
+    elif jd_skills:
+        skills_score = _jaccard(resume_skills, jd_skills)
     else:
         skills_score = 0.0
 

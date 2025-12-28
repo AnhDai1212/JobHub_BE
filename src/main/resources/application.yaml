@@ -34,14 +34,14 @@ spring:
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000
-mail:
-  sender:
-    name: ${MAIL_SENDER_NAME:JobHub}
   servlet:
     multipart:
       enabled: true
       max-file-size: 10MB
       max-request-size: 10MB
+mail:
+  sender:
+    name: ${MAIL_SENDER_NAME:JobHub}
 
 server:
   port: ${SERVER_PORT:8080}
