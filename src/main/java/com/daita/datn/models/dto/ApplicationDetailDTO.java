@@ -17,5 +17,6 @@ public class ApplicationDetailDTO {
     private String status;
     private String parsedCvId;
     private String parsedCvJson;
+    private Double matchingScore;
     private List<ApplicationHistoryDTO> histories;
 }

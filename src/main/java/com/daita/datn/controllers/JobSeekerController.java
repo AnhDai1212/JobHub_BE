@@ -9,6 +9,7 @@ import com.daita.datn.models.dto.CvParseResponse;
 import com.daita.datn.models.dto.ParsedCvDTO;
 import com.daita.datn.models.dto.ParsedCvSaveRequest;
 import com.daita.datn.models.dto.BaseSearchDTO;
+import com.daita.datn.models.dto.SkillDTO;
 import com.daita.datn.models.dto.pagination.PageListDTO;
 import com.daita.datn.services.JobSeekerService;
 import jakarta.validation.Valid;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/job-seekers")
@@ -162,6 +164,60 @@ public class JobSeekerController {
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.JOB_SEEKER_LIST_SUCCESS)
                 .data(list)
+                .build();
+    }
+
+    @GetMapping("/skills")
+    @PreAuthorize("hasRole('JOB_SEEKER')")
+    public ApiResponse<List<SkillDTO>> listMySkills() {
+        List<SkillDTO> list = jobSeekerService.listMySkills();
+        return ApiResponse.<List<SkillDTO>>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.SKILL_LIST_SUCCESS)
+                .data(list)
+                .build();
+    }
+
+    @PostMapping("/skills")
+    @PreAuthorize("hasRole('JOB_SEEKER')")
+    public ApiResponse<SkillDTO> createSkill(
+            @RequestBody SkillDTO request
+    ) {
+        SkillDTO dto = jobSeekerService.createSkill(request);
+        return ApiResponse.<SkillDTO>builder()
+                .code(HttpStatus.CREATED.value())
+                .status(HttpStatus.CREATED.getReasonPhrase())
+                .message(MessageConstant.SKILL_CREATE_SUCCESS)
+                .data(dto)
+                .build();
+    }
+
+    @PatchMapping("/skills/{skillId}")
+    @PreAuthorize("hasRole('JOB_SEEKER')")
+    public ApiResponse<SkillDTO> updateSkill(
+            @PathVariable Integer skillId,
+            @RequestBody SkillDTO request
+    ) {
+        SkillDTO dto = jobSeekerService.updateSkill(skillId, request);
+        return ApiResponse.<SkillDTO>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.SKILL_UPDATE_SUCCESS)
+                .data(dto)
+                .build();
+    }
+
+    @DeleteMapping("/skills/{skillId}")
+    @PreAuthorize("hasRole('JOB_SEEKER')")
+    public ApiResponse<Void> deleteSkill(
+            @PathVariable Integer skillId
+    ) {
+        jobSeekerService.deleteSkill(skillId);
+        return ApiResponse.<Void>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.SKILL_DELETE_SUCCESS)
                 .build();
     }
 }

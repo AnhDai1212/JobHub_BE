@@ -4,6 +4,7 @@ import com.daita.datn.enums.JobType;
 import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 
 @Getter @Setter @Builder
@@ -11,6 +12,7 @@ import java.util.Set;
 public class JobDTO {
     private Integer jobId;
     private Integer companyId;
+    private String companyName;
     private Integer recruiterId;
     private String companyAvatarUrl;
     private String title;
@@ -24,4 +26,5 @@ public class JobDTO {
     private LocalDateTime createdAt;
     private Set<String> categories;
     private Set<String> tags;
+    private List<String> requirements;
 }

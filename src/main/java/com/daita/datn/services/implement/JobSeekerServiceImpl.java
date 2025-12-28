@@ -7,6 +7,8 @@ import com.daita.datn.exceptions.AppException;
 import com.daita.datn.models.dto.JobSeekerDTO;
 import com.daita.datn.models.dto.JobSeekerCreateRequest;
 import com.daita.datn.models.dto.JobSeekerUpdateRequest;
+import com.daita.datn.models.dto.SkillDTO;
+import com.daita.datn.models.entities.CandidateSkill;
 import com.daita.datn.models.entities.JobSeeker;
 import com.daita.datn.models.entities.ParsedCv;
 import com.daita.datn.models.entities.auth.Account;
@@ -15,8 +17,10 @@ import com.daita.datn.models.dto.ParsedCvDTO;
 import com.daita.datn.models.dto.ParsedCvSaveRequest;
 import com.daita.datn.models.dto.BaseSearchDTO;
 import com.daita.datn.models.dto.pagination.PageListDTO;
+import com.daita.datn.models.mappers.CandidateSkillMapper;
 import com.daita.datn.repositories.ParsedCvRepository;
 import com.daita.datn.repositories.JobSeekerRepository;
+import com.daita.datn.repositories.CandidateSkillRepository;
 import com.daita.datn.services.AccountService;
 import com.daita.datn.services.JobSeekerService;
 import com.daita.datn.services.RoleService;
@@ -30,6 +34,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -45,18 +51,24 @@ import org.springframework.core.io.ByteArrayResource;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JobSeekerServiceImpl implements JobSeekerService {
 
+    private static final Logger logger = LoggerFactory.getLogger(JobSeekerServiceImpl.class);
+
     AccountService accountService;
     JobSeekerRepository jobSeekerRepository;
     ParsedCvRepository parsedCvRepository;
+    CandidateSkillRepository candidateSkillRepository;
     RoleService roleService;
     JobSeekerMapper jobSeekerMapper;
+    CandidateSkillMapper candidateSkillMapper;
     S3StorageService s3StorageService;
     CloudinaryService cloudinaryService;
     ParsedCvMapper parsedCvMapper;
@@ -176,12 +188,18 @@ public class JobSeekerServiceImpl implements JobSeekerService {
 
         RestTemplate restTemplate = new RestTemplate();
 
-        Map<String, Object> response = restTemplate.exchange(
-                cvParserUrl + "/parse/cv",
-                HttpMethod.POST,
-                requestEntity,
-                Map.class
-        ).getBody();
+        Map<String, Object> response;
+        try {
+            response = restTemplate.exchange(
+                    cvParserUrl + "/parse/cv",
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            ).getBody();
+        } catch (Exception e) {
+            logger.error("Failed to parse CV via {}: {}", cvParserUrl, e.getMessage(), e);
+            throw new AppException(ErrorCode.EXTERNAL_SERVICE_ERROR, e.getMessage());
+        }
 
         if (response == null) {
             throw new AppException(ErrorCode.SERVER_ERROR, "Empty response from parser");
@@ -284,6 +302,54 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         return new PageListDTO<>(rows, (int) page.getTotalElements());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<SkillDTO> listMySkills() {
+        JobSeeker jobSeeker = getCurrentJobSeekerEntity();
+        List<CandidateSkill> skills = candidateSkillRepository
+                .findByJobSeeker_JobSeekerId(jobSeeker.getJobSeekerId());
+        return candidateSkillMapper.toDtoList(skills);
+    }
+
+    @Override
+    @Transactional
+    public SkillDTO createSkill(SkillDTO request) {
+        JobSeeker jobSeeker = getCurrentJobSeekerEntity();
+        CandidateSkill skill = candidateSkillMapper.toEntity(request, jobSeeker);
+        CandidateSkill saved = candidateSkillRepository.save(skill);
+        return candidateSkillMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public SkillDTO updateSkill(Integer skillId, SkillDTO request) {
+        JobSeeker jobSeeker = getCurrentJobSeekerEntity();
+        CandidateSkill skill = candidateSkillRepository.findById(skillId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Skill"));
+
+        if (!Objects.equals(skill.getJobSeeker().getJobSeekerId(), jobSeeker.getJobSeekerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        candidateSkillMapper.updateFromDto(request, skill);
+        CandidateSkill saved = candidateSkillRepository.save(skill);
+        return candidateSkillMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSkill(Integer skillId) {
+        JobSeeker jobSeeker = getCurrentJobSeekerEntity();
+        CandidateSkill skill = candidateSkillRepository.findById(skillId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Skill"));
+
+        if (!Objects.equals(skill.getJobSeeker().getJobSeekerId(), jobSeeker.getJobSeekerId())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        candidateSkillRepository.delete(skill);
+    }
+
     private JobSeekerDTO enrichWithCvUrl(JobSeeker jobSeeker) {
         JobSeekerDTO dto = jobSeekerMapper.toDto(jobSeeker);
         if (jobSeeker.getCvUrl() != null && !jobSeeker.getCvUrl().isBlank()) {
@@ -295,5 +361,11 @@ public class JobSeekerServiceImpl implements JobSeekerService {
             );
         }
         return dto;
+    }
+
+    private JobSeeker getCurrentJobSeekerEntity() {
+        Account account = accountService.getCurrentAccount();
+        return jobSeekerRepository.findByAccount_AccountId(account.getAccountId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "JobSeeker"));
     }
 }

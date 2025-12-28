@@ -45,7 +45,7 @@ public class Constant {
             Set.of("createAt", "deadline", "title", "status");
 
     public static final Set<String> APPLICATION_SORT_FIELDS =
-            Set.of("appliedAt", "status");
+            Set.of("appliedAt", "status", "matchingScore");
 
     public static final Set<String> FAVORITE_SORT_FIELDS =
             Set.of("favoriteId");

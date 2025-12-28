@@ -12,4 +12,5 @@ public class ApplicationDTO {
     private LocalDateTime appliedAt;
     private String status;
     private String parsedCvId;
+    private Double matchingScore;
 }

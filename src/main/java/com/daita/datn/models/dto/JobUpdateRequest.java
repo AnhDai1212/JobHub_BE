@@ -36,4 +36,6 @@ public class JobUpdateRequest {
     private List<Integer> tagIds;
 
     private List<Integer> categoryIds;
+
+    private List<String> requirements;
 }

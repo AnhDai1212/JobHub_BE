@@ -36,6 +36,9 @@ public class Application {
     @Column(length = 50)
     private String status;
 
+    @Column(name = "matching_score")
+    private Double matchingScore;
+
     @OneToMany(mappedBy = "application", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ApplicationHistory> histories;
 }

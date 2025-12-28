@@ -24,6 +24,7 @@ import com.daita.datn.models.entities.Application;
 import com.daita.datn.models.entities.ApplicationHistory;
 import com.daita.datn.enums.JobType;
 import com.daita.datn.models.entities.JobCategory;
+import com.daita.datn.models.entities.JobRequirement;
 import com.daita.datn.models.entities.JobSeeker;
 import com.daita.datn.models.entities.JobTag;
 import com.daita.datn.models.entities.ParsedCv;
@@ -36,10 +37,12 @@ import com.daita.datn.repositories.ParsedCvRepository;
 import com.daita.datn.repositories.RecruiterRepository;
 import com.daita.datn.repositories.ApplicationRepository;
 import com.daita.datn.models.mappers.JobMapper;
+import com.daita.datn.models.mappers.JobRequirementMapper;
 import com.daita.datn.models.mappers.ApplicationMapper;
 import com.daita.datn.services.AccountService;
 import com.daita.datn.services.JobService;
 import com.daita.datn.models.dto.pagination.PaginationDTO;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -50,12 +53,23 @@ import java.util.Set;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
@@ -63,14 +77,14 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
-import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class JobServiceImpl implements JobService {
+
+    private static final Logger logger = LoggerFactory.getLogger(JobServiceImpl.class);
 
     RecruiterRepository recruiterRepository;
     JobRepository jobRepository;
@@ -81,8 +95,14 @@ public class JobServiceImpl implements JobService {
     ParsedCvRepository parsedCvRepository;
     AccountService accountService;
     JobMapper jobMapper;
+    JobRequirementMapper jobRequirementMapper;
     ApplicationMapper applicationMapper;
     NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    ObjectMapper objectMapper;
+
+    @NonFinal
+    @Value("${cv.parser.url}")
+    String cvParserUrl;
 
     @Override
     @Transactional
@@ -108,9 +128,11 @@ public class JobServiceImpl implements JobService {
 
         Job job = jobMapper.toEntity(request, company, recruiter);
         applyTagsAndCategories(job, request.getTagIds(), request.getCategoryIds());
+        applyRequirements(job, request.getRequirements());
 
         Job saved = jobRepository.save(job);
 
+        tryParseAndStoreJd(saved);
         return jobMapper.toDto(saved);
     }
 
@@ -331,9 +353,13 @@ public class JobServiceImpl implements JobService {
 
         jobMapper.updateJobFromRequest(request, job);
         applyTagsAndCategories(job, request.getTagIds(), request.getCategoryIds());
+        applyRequirements(job, request.getRequirements());
 
         Job saved = jobRepository.save(job);
 
+        if (request.getDescription() != null) {
+            tryParseAndStoreJd(saved);
+        }
         return jobMapper.toDto(saved);
     }
 
@@ -474,6 +500,29 @@ public class JobServiceImpl implements JobService {
         }
     }
 
+    private void applyRequirements(Job job, List<String> requirements) {
+        if (requirements == null) {
+            return;
+        }
+
+        List<String> normalized = requirements.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+
+        if (normalized.isEmpty()) {
+            job.setRequirements(Collections.emptyList());
+            return;
+        }
+
+        List<JobRequirement> entities = new ArrayList<>();
+        for (int i = 0; i < normalized.size(); i++) {
+            entities.add(jobRequirementMapper.toEntity(normalized.get(i), i + 1, job));
+        }
+        job.setRequirements(entities);
+    }
+
     private Set<JobTag> resolveTags(List<Integer> tagIds) {
         List<Integer> ids = tagIds.stream()
                 .filter(Objects::nonNull)
@@ -588,6 +637,57 @@ public class JobServiceImpl implements JobService {
         }
 
         return " ";
+    }
+
+    private void tryParseAndStoreJd(Job job) {
+        String description = job.getDescription();
+        if (description == null || description.isBlank()) {
+            return;
+        }
+
+        try {
+            Map<String, Object> response = parseJdText(description);
+            Object entities = response.get("entities");
+            if (entities == null) {
+                return;
+            }
+
+            String parsedJson = objectMapper.writeValueAsString(entities);
+            job.setParsedJdJson(parsedJson);
+            jobRepository.save(job);
+        } catch (Exception e) {
+            logger.warn("Failed to parse JD for job {}: {}", job.getJobId(), e.getMessage());
+        }
+    }
+
+    private Map<String, Object> parseJdText(String text) {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("text", text);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+        RestTemplate restTemplate = new RestTemplate();
+
+        Map<String, Object> response;
+        try {
+            response = restTemplate.exchange(
+                    cvParserUrl + "/parse/jd",
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            ).getBody();
+        } catch (Exception e) {
+            logger.error("Failed to parse JD via {}: {}", cvParserUrl, e.getMessage(), e);
+            throw new AppException(ErrorCode.EXTERNAL_SERVICE_ERROR, e.getMessage());
+        }
+
+        if (response == null) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Empty response from parser");
+        }
+
+        return response;
     }
 
     private record JobScoreRow(Integer jobId, Double score) {}

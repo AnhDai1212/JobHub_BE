@@ -5,6 +5,7 @@ from typing import Optional, List
 import docx2txt
 import fitz  # PyMuPDF
 import spacy
+import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 
@@ -24,9 +25,9 @@ async def health():
 
 
 class RankWeights(BaseModel):
-    skills: float = 0.6
-    experience: float = 0.3
-    title: float = 0.1
+    skills: float = 0.5
+    experience: float = 0.2
+    title: float = 0.3
 
 
 class RankRequest(BaseModel):
@@ -66,12 +67,65 @@ def _parse_with_model(model, text: str) -> dict:
     return out
 
 
-def _jaccard(a: List[str], b: List[str]) -> float:
-    set_a = set(x.lower().strip() for x in a if x)
-    set_b = set(x.lower().strip() for x in b if x)
-    if not set_a or not set_b:
-        return 0.0
-    return len(set_a & set_b) / len(set_a | set_b)
+def _normalize_years_list(values: List[str]) -> List[float]:
+    years = []
+    for p in values:
+        parts = str(p).split()
+        if not parts:
+            continue
+        try:
+            base_val = float(parts[0])
+        except (ValueError, TypeError):
+            continue
+
+        text = str(p).lower()
+        year = base_val if ("years" in text or "year" in text) else base_val / 12
+        if ("months" in text or "month" in text) and len(parts) >= 3:
+            try:
+                year += float(parts[2]) / 12
+            except (ValueError, TypeError):
+                pass
+
+        years.append(round(year, 2))
+    return years
+
+
+def _get_search_results(search_query: str) -> Optional[str]:
+    endpoint = (
+        "https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&utf8=1"
+        "&redirects=1&srprop=size&origin=*&srsearch="
+        + search_query
+    )
+    try:
+        response = requests.get(endpoint, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("query", {}).get("search", [])
+        if results:
+            title = results[0].get("title", "")
+            if title:
+                return _get_summary(title)
+    except Exception:
+        return None
+    return None
+
+
+def _get_summary(title: str) -> Optional[str]:
+    endpoint = (
+        "https://en.wikipedia.org/w/api.php?action=query&prop=extracts&format=json"
+        "&exsentences=5&explaintext=&origin=*&titles="
+        + title
+    )
+    try:
+        response = requests.get(endpoint, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+        results = data.get("query", {}).get("pages", {})
+        for result in results.values():
+            return result.get("extract", "")
+    except Exception:
+        return None
+    return None
 
 
 @app.post("/parse/cv")
@@ -98,47 +152,70 @@ async def rank(req: RankRequest):
     jd = req.parsedJd or {}
     w = req.weights
 
-    cv_skills = cv.get("SKILLS") or []
+    resume_worked_as = cv.get("WORKED AS") or cv.get("JOBPOST") or []
+    resume_exp_list = cv.get("YEARS OF EXPERIENCE") or cv.get("EXPERIENCE") or []
+    resume_experience = _normalize_years_list(resume_exp_list)
+    resume_skills = cv.get("SKILLS") or []
+
     jd_skills = jd.get("SKILLS") or []
-    skills_score = _jaccard(cv_skills, jd_skills)
-
-    cv_exp = cv.get("EXPERIENCE") or []
-    jd_exp = jd.get("EXPERIENCE") or []
-    exp_score = 0.0
-    if cv_exp and jd_exp:
-        try:
-            cv_years = _normalize_years(cv_exp[0])
-            jd_years = _normalize_years(jd_exp[0])
-            diff = jd_years - cv_years
-            if diff <= 0:
-                exp_score = 1.0
-            elif diff <= 1:
-                exp_score = 0.7
-            else:
-                exp_score = 0.0
-        except Exception:
-            exp_score = 0.0
-
-    cv_post = cv.get("JOBPOST") or cv.get("WORKED AS") or []
+    jd_exp_list = jd.get("EXPERIENCE") or []
+    jd_experience = _normalize_years_list(jd_exp_list)
     jd_post = jd.get("JOBPOST") or []
-    title_score = _jaccard(cv_post, jd_post)
 
-    total = (skills_score * w.skills) + (exp_score * w.experience) + (title_score * w.title)
+    jd_post_lower = [item.lower() for item in jd_post]
+    experience_score = 0.0
+    title_score = 0.0
+    match_index = -1
+    result = False
+    if resume_worked_as:
+        resume_worked_as_lower = [item.lower() for item in resume_worked_as]
+        for i, item in enumerate(resume_worked_as_lower):
+            if item in jd_post_lower:
+                result = True
+                match_index = i
+                if resume_experience and jd_experience and match_index < len(resume_experience):
+                    experience_difference = jd_experience[0] - resume_experience[match_index]
+                    if experience_difference <= 0:
+                        experience_score = 1.0
+                    elif experience_difference <= 1:
+                        experience_score = 0.7
+                    else:
+                        experience_score = 0.0
+                break
+            else:
+                result = False
+
+        title_score = 1.0 if result else 0.0
+
+    expanded_resume_skills = []
+    if resume_skills:
+        for skill in resume_skills:
+            search_query = f"{skill} in technology "
+            summary = _get_search_results(search_query)
+            if summary:
+                expanded_resume_skills.append(summary)
+
+    if jd_skills:
+        count = 0
+        for skill in jd_skills:
+            skill_lower = str(skill).lower()
+            for summary in expanded_resume_skills:
+                if skill_lower in summary.lower():
+                    count += 1
+                    break
+        skills_score = 1 - ((len(jd_skills) - count) / len(jd_skills))
+    else:
+        skills_score = 0.0
+
+    skills_score = skills_score * w.skills
+    experience_score = experience_score * w.experience
+    title_score = title_score * w.title
+
+    total = (skills_score + experience_score + title_score) * 100
     return {
-        "score": round(total, 4),
+        "score": round(total, 2),
         "skillsScore": round(skills_score, 4),
-        "experienceScore": round(exp_score, 4),
+        "experienceScore": round(experience_score, 4),
         "titleScore": round(title_score, 4),
         "weights": w,
     }
-
-
-def _normalize_years(text: str) -> float:
-    # crude parser: expects "X years" or "X months"
-    tokens = text.lower().split()
-    if not tokens:
-        return 0.0
-    val = float(tokens[0])
-    if "month" in text:
-        return round(val / 12.0, 2)
-    return val

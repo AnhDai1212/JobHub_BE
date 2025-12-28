@@ -22,6 +22,7 @@ services:
 
   app:
     build: .
+    image: tuadai/datn-app:1.13
     ports:
       - "${APP_PORT:-8080}:8080"
     env_file:
@@ -33,6 +34,7 @@ services:
       - jobhub-net
   cv-parser:
     build: ./cv-parser-service
+    image: tuadai/datn-cv-parser:1.12
     ports:
       - "8000:8000"
     networks:

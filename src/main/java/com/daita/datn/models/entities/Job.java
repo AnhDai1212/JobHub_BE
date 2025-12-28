@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import com.daita.datn.enums.JobType;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -54,6 +55,9 @@ public class Job extends BaseEntity {
     @Column(name = "deadline")
     private LocalDate deadline;
 
+    @Column(name = "parsed_jd_json", columnDefinition = "JSON")
+    private String parsedJdJson;
+
     // ================== RELATIONSHIPS ==================
     @ManyToMany
     @JoinTable(
@@ -70,6 +74,10 @@ public class Job extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "tag_id")
     )
     private Set<JobTag> tags;
+
+    @OneToMany(mappedBy = "job", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC")
+    private List<JobRequirement> requirements;
 
     @OneToMany(mappedBy = "job", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Application> applications;
