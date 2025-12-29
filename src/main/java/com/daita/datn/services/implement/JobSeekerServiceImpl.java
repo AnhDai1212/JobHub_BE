@@ -350,6 +350,22 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         candidateSkillRepository.delete(skill);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ParsedCvDTO getLatestParsedCv() {
+        JobSeeker jobSeeker = getCurrentJobSeekerEntity();
+        ParsedCv parsedCv = parsedCvRepository
+                .findTopByJobSeeker_JobSeekerIdOrderByCreateAtDesc(jobSeeker.getJobSeekerId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "ParsedCv"));
+
+        try {
+            Object parsedDataObj = objectMapper.readValue(parsedCv.getParsedJson(), Object.class);
+            return parsedCvMapper.toDto(parsedCv, parsedDataObj);
+        } catch (IOException e) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Cannot parse stored cv");
+        }
+    }
+
     private JobSeekerDTO enrichWithCvUrl(JobSeeker jobSeeker) {
         JobSeekerDTO dto = jobSeekerMapper.toDto(jobSeeker);
         if (jobSeeker.getCvUrl() != null && !jobSeeker.getCvUrl().isBlank()) {

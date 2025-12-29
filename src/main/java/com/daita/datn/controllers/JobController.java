@@ -14,8 +14,10 @@ import com.daita.datn.services.JobService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/jobs")
@@ -125,6 +127,21 @@ public class JobController {
                 .code(HttpStatus.OK.value())
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.JOB_STATUS_UPDATE_SUCCESS)
+                .data(job)
+                .build();
+    }
+
+    @PostMapping(path = "/{jobId}/jd", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ApiResponse<JobDTO> uploadJobJd(
+            @PathVariable Integer jobId,
+            @RequestPart("file") MultipartFile file
+    ) {
+        JobDTO job = jobService.uploadJobJd(jobId, file);
+        return ApiResponse.<JobDTO>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.JOB_JD_UPLOAD_SUCCESS)
                 .data(job)
                 .build();
     }

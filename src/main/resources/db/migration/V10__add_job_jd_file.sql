@@ -1,0 +1,2 @@
+ALTER TABLE jobs
+    ADD COLUMN jd_file_url VARCHAR(255) NULL;

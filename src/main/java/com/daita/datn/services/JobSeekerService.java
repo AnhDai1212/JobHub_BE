@@ -34,4 +34,6 @@ public interface JobSeekerService {
     SkillDTO updateSkill(Integer skillId, SkillDTO request);
 
     void deleteSkill(Integer skillId);
+
+    ParsedCvDTO getLatestParsedCv();
 }

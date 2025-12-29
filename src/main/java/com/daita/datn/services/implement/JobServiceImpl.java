@@ -41,6 +41,7 @@ import com.daita.datn.models.mappers.JobRequirementMapper;
 import com.daita.datn.models.mappers.ApplicationMapper;
 import com.daita.datn.services.AccountService;
 import com.daita.datn.services.JobService;
+import com.daita.datn.services.S3StorageService;
 import com.daita.datn.models.dto.pagination.PaginationDTO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -67,9 +68,11 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Join;
@@ -99,6 +102,7 @@ public class JobServiceImpl implements JobService {
     ApplicationMapper applicationMapper;
     NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     ObjectMapper objectMapper;
+    S3StorageService s3StorageService;
 
     @NonFinal
     @Value("${cv.parser.url}")
@@ -357,9 +361,53 @@ public class JobServiceImpl implements JobService {
 
         Job saved = jobRepository.save(job);
 
-        if (request.getDescription() != null) {
+        if (request.getDescription() != null && (saved.getJdFileUrl() == null || saved.getJdFileUrl().isBlank())) {
             tryParseAndStoreJd(saved);
         }
+        return jobMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public JobDTO uploadJobJd(Integer jobId, MultipartFile file) {
+        Util.validateFile(
+                file,
+                Constant.ALLOWED_DOC_CONTENT_TYPES,
+                Constant.MAX_UPLOAD_FILE_SIZE_BYTES
+        );
+
+        Account account = accountService.getCurrentAccount();
+        Recruiter recruiter = recruiterRepository
+                .findByAccount_AccountId(account.getAccountId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Recruiter"));
+        assertApproved(recruiter);
+
+        Job job = jobRepository.findByJobIdAndRecruiter_RecruiterId(jobId, recruiter.getRecruiterId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Job"));
+
+        String key;
+        try {
+            key = s3StorageService.uploadAndReturnKey(
+                    file,
+                    "job-jd/" + job.getJobId()
+            );
+        } catch (java.io.IOException e) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Failed to upload JD file");
+        }
+
+        Map<String, Object> response = parseJdFile(file);
+        Object entities = response.get("entities");
+        if (entities != null) {
+            try {
+                String parsedJson = objectMapper.writeValueAsString(entities);
+                job.setParsedJdJson(parsedJson);
+            } catch (Exception e) {
+                logger.warn("Failed to serialize JD entities for job {}: {}", job.getJobId(), e.getMessage());
+            }
+        }
+
+        job.setJdFileUrl(key);
+        Job saved = jobRepository.save(job);
         return jobMapper.toDto(saved);
     }
 
@@ -511,16 +559,22 @@ public class JobServiceImpl implements JobService {
                 .filter(value -> !value.isBlank())
                 .toList();
 
+        List<JobRequirement> target = job.getRequirements();
+        if (target == null) {
+            target = new ArrayList<>();
+            job.setRequirements(target);
+        }
+
+        target.clear();
         if (normalized.isEmpty()) {
-            job.setRequirements(Collections.emptyList());
             return;
         }
 
-        List<JobRequirement> entities = new ArrayList<>();
         for (int i = 0; i < normalized.size(); i++) {
-            entities.add(jobRequirementMapper.toEntity(normalized.get(i), i + 1, job));
+            JobRequirement requirement =
+                    jobRequirementMapper.toEntity(normalized.get(i), i + 1, job);
+            target.add(requirement);
         }
-        job.setRequirements(entities);
     }
 
     private Set<JobTag> resolveTags(List<Integer> tagIds) {
@@ -663,6 +717,48 @@ public class JobServiceImpl implements JobService {
     private Map<String, Object> parseJdText(String text) {
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("text", text);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+        RestTemplate restTemplate = new RestTemplate();
+
+        Map<String, Object> response;
+        try {
+            response = restTemplate.exchange(
+                    cvParserUrl + "/parse/jd",
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            ).getBody();
+        } catch (Exception e) {
+            logger.error("Failed to parse JD via {}: {}", cvParserUrl, e.getMessage(), e);
+            throw new AppException(ErrorCode.EXTERNAL_SERVICE_ERROR, e.getMessage());
+        }
+
+        if (response == null) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Empty response from parser");
+        }
+
+        return response;
+    }
+
+    private Map<String, Object> parseJdFile(MultipartFile file) {
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (java.io.IOException e) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Failed to read JD file");
+        }
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", new ByteArrayResource(bytes) {
+            @Override
+            public String getFilename() {
+                return file.getOriginalFilename();
+            }
+        });
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);

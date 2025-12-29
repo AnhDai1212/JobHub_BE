@@ -10,6 +10,7 @@ import com.daita.datn.models.dto.BaseSearchDTO;
 import com.daita.datn.models.dto.ApplicationDetailDTO;
 import com.daita.datn.models.dto.ApplicationStatusUpdateRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
+import org.springframework.web.multipart.MultipartFile;
 
 public interface JobService {
     JobDTO createJob(JobCreateRequest request);
@@ -37,4 +38,6 @@ public interface JobService {
     ApplicationDetailDTO getApplicationDetail(String applicationId);
 
     ApplicationDTO updateApplicationStatus(String applicationId, ApplicationStatusUpdateRequest request);
+
+    JobDTO uploadJobJd(Integer jobId, MultipartFile file);
 }

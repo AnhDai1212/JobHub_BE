@@ -1,5 +1,6 @@
 import io
 import os
+import re
 from typing import Optional, List
 
 import docx2txt
@@ -64,6 +65,194 @@ def _parse_with_model(model, text: str) -> dict:
     out = {}
     for ent in doc.ents:
         out.setdefault(ent.label_, []).append(ent.text)
+    return out
+
+
+def _extract_skills_from_text(text: str) -> List[str]:
+    lower = text.lower()
+    idx = lower.find("skills")
+    if idx == -1:
+        return []
+
+    section = text[idx:]
+    lines = section.splitlines()
+    skills = []
+    started = False
+    for line in lines:
+        cleaned = line.strip().strip("-").strip()
+        if not cleaned:
+            if started:
+                continue
+            continue
+
+        lowered = cleaned.lower()
+        if not started:
+            if lowered.startswith("skills"):
+                started = True
+                if ":" in cleaned:
+                    skills.extend(_split_skill_tokens(cleaned.split(":", 1)[1]))
+                continue
+            if "skills" in lowered:
+                started = True
+                after = cleaned.split(":", 1)[1] if ":" in cleaned else ""
+                skills.extend(_split_skill_tokens(after))
+                continue
+            continue
+
+        if _is_section_header(lowered):
+            break
+
+        skills.extend(_split_skill_tokens(cleaned))
+
+    return _dedupe_skills(skills)
+
+
+def _is_section_header(line: str) -> bool:
+    headers = (
+        "responsibilities",
+        "requirements",
+        "benefits",
+        "job description",
+        "company introduction",
+        "about",
+        "what you will do",
+        "education",
+    )
+    return any(line.startswith(h) for h in headers)
+
+
+def _split_skill_tokens(text: str) -> List[str]:
+    if not text:
+        return []
+    tokens = re.split(r"[,\;\-\u2022]", text)
+    out = []
+    for token in tokens:
+        cleaned = token.strip().strip(".")
+        if not cleaned:
+            continue
+        out.extend(_normalize_skill_phrase(cleaned))
+    return out
+
+
+def _normalize_skill_phrase(text: str) -> List[str]:
+    cleaned = text.strip()
+    lower = cleaned.lower()
+    prefixes = (
+        "proficient in",
+        "solid understanding of",
+        "familiar with",
+        "familiarity with",
+        "experience with",
+        "experience in",
+        "knowledge of",
+        "skill for",
+        "knack for",
+        "basic understanding of",
+        "proficient understanding of",
+        "understanding of",
+    )
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip()
+            lower = cleaned.lower()
+            break
+
+    if lower.startswith("such as"):
+        cleaned = cleaned[7:].strip()
+        lower = cleaned.lower()
+
+    if " such as " in lower:
+        cleaned = cleaned.split(" such as ", 1)[1].strip()
+        lower = cleaned.lower()
+
+    if "{{" in cleaned or "}}" in cleaned:
+        return []
+
+    if _is_noise_skill_phrase(lower):
+        return []
+
+    parts = [p.strip() for p in cleaned.split(" and ") if p.strip()]
+    return [p for p in parts if _is_skill_like(p)]
+
+
+def _is_noise_skill_phrase(text: str) -> bool:
+    prefixes = (
+        "with ",
+        "and ",
+        "understanding ",
+        "creating ",
+        "implementing ",
+        "support ",
+        "its ",
+        "weaknesses ",
+        "libraries ",
+        "or any ",
+    )
+    return text.startswith(prefixes)
+
+
+def _is_skill_like(text: str) -> bool:
+    tokens = text.split()
+    if not tokens or len(tokens) > 4:
+        return False
+
+    lower = text.lower()
+    if lower.startswith(("with ", "and ")):
+        return False
+
+    allowlist = {
+        "java",
+        "spring",
+        "spring boot",
+        "mysql",
+        "postgresql",
+        "mongodb",
+        "mvc",
+        "jdbc",
+        "rest",
+        "restful",
+        "jvm",
+        "git",
+        "maven",
+        "gradle",
+        "ant",
+        "spark",
+        "play",
+        "swing",
+        "swt",
+        "awt",
+        "kafka",
+        "docker",
+        "kubernetes",
+        "aws",
+        "gcp",
+        "azure",
+        "python",
+        "node",
+        "nodejs",
+        "react",
+        "angular",
+        "vue",
+    }
+
+    if lower in allowlist:
+        return True
+
+    if any(token.lower() in allowlist for token in tokens):
+        return True
+
+    return any(any(ch.isupper() for ch in token) for token in tokens)
+
+
+def _dedupe_skills(skills: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for s in skills:
+        key = s.strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(s.strip())
     return out
 
 
@@ -151,6 +340,10 @@ async def parse_jd(file: Optional[UploadFile] = File(None), text: Optional[str] 
     if not raw_text:
         return {"error": "No text provided"}, 400
     entities = _parse_with_model(jd_model, raw_text)
+    fallback_skills = _extract_skills_from_text(raw_text)
+    if fallback_skills:
+        existing = entities.get("SKILLS") or []
+        entities["SKILLS"] = _dedupe_skills(existing + fallback_skills)
     return {"rawText": raw_text, "entities": entities}
 
 

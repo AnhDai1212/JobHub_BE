@@ -58,6 +58,9 @@ public class Job extends BaseEntity {
     @Column(name = "parsed_jd_json", columnDefinition = "JSON")
     private String parsedJdJson;
 
+    @Column(name = "jd_file_url", length = 255)
+    private String jdFileUrl;
+
     // ================== RELATIONSHIPS ==================
     @ManyToMany
     @JoinTable(

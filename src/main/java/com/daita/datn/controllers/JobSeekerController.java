@@ -111,6 +111,18 @@ public class JobSeekerController {
                 .build();
     }
 
+    @GetMapping("/cv/online/latest")
+    @PreAuthorize("hasRole('JOB_SEEKER')")
+    public ApiResponse<ParsedCvDTO> getLatestParsedCv() {
+        ParsedCvDTO dto = jobSeekerService.getLatestParsedCv();
+        return ApiResponse.<ParsedCvDTO>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.PARSED_CV_FETCH_SUCCESS)
+                .data(dto)
+                .build();
+    }
+
     @PostMapping(path = "/cv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('JOB_SEEKER')")
     public ApiResponse<JobSeekerDTO> uploadCv(

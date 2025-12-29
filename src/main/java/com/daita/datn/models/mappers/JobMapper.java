@@ -38,6 +38,7 @@ public interface JobMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "parsedJdJson", ignore = true)
+    @Mapping(target = "jdFileUrl", ignore = true)
     @Mapping(target = "requirements", ignore = true)
     void updateJobFromRequest(JobUpdateRequest request, @MappingTarget Job job);
 
@@ -53,6 +54,7 @@ public interface JobMapper {
     @Mapping(target = "favorites", ignore = true)
     @Mapping(target = "recommendations", ignore = true)
     @Mapping(target = "parsedJdJson", ignore = true)
+    @Mapping(target = "jdFileUrl", ignore = true)
     Job toEntity(JobCreateRequest request, Company company, Recruiter recruiter);
 
     default Set<String> mapCategoryNames(Set<JobCategory> categories) {

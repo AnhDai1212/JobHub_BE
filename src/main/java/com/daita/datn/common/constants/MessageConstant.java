@@ -49,6 +49,7 @@ public class MessageConstant {
     public static final String JOB_UPDATE_SUCCESS = "Job updated successfully";
     public static final String JOB_STATUS_UPDATE_SUCCESS = "Job status updated successfully";
     public static final String JOB_DELETE_SUCCESS = "Job deleted successfully";
+    public static final String JOB_JD_UPLOAD_SUCCESS = "Job JD uploaded successfully";
 
     // Job seeker
     public static final String JOB_SEEKER_FETCH_SUCCESS = "Job seeker fetched successfully";
@@ -59,6 +60,7 @@ public class MessageConstant {
     public static final String JOB_SEEKER_AVATAR_UPDATE_SUCCESS = "Job seeker avatar updated successfully";
     public static final String CV_PARSE_SUCCESS = "CV parsed successfully";
     public static final String PARSED_CV_SAVE_SUCCESS = "Parsed CV saved successfully";
+    public static final String PARSED_CV_FETCH_SUCCESS = "Parsed CV fetched successfully";
     public static final String CV_UPLOAD_SUCCESS = "CV uploaded successfully";
     public static final String CV_DELETE_SUCCESS = "CV deleted successfully";
     public static final String SKILL_LIST_SUCCESS = "Skills fetched successfully";

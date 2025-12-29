@@ -28,8 +28,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -197,7 +203,8 @@ public class ApplicationServiceImpl implements ApplicationService {
                 return null;
             }
 
-            Map<String, Object> rankResponse = requestRank(parsedCvMap, parsedJdMap);
+            Map<String, Object> mergedJdMap = mergeJdData(job, parsedCvMap, parsedJdMap);
+            Map<String, Object> rankResponse = requestRank(parsedCvMap, mergedJdMap);
             Object score = rankResponse.get("score");
             if (score instanceof Number number) {
                 return number.doubleValue();
@@ -210,6 +217,138 @@ public class ApplicationServiceImpl implements ApplicationService {
         }
 
         return null;
+    }
+
+    private Map<String, Object> mergeJdData(
+            Job job,
+            Map<String, Object> parsedCv,
+            Map<String, Object> parsedJd
+    ) {
+        Map<String, Object> merged = new HashMap<>();
+        if (parsedJd != null) {
+            merged.putAll(parsedJd);
+        }
+
+        String jdText = buildJdText(job);
+        Set<String> skills = new LinkedHashSet<>(toStringSet(parsedJd == null ? null : parsedJd.get("SKILLS")));
+        Set<String> jobPosts = new LinkedHashSet<>(toStringSet(parsedJd == null ? null : parsedJd.get("JOBPOST")));
+        Set<String> experiences = new LinkedHashSet<>(toStringSet(parsedJd == null ? null : parsedJd.get("EXPERIENCE")));
+
+        if (job != null && job.getTitle() != null && !job.getTitle().isBlank()) {
+            jobPosts.add(job.getTitle().trim());
+        }
+        if (job != null && job.getTags() != null && !job.getTags().isEmpty()) {
+            for (var tag : job.getTags()) {
+                if (tag != null && tag.getTagName() != null) {
+                    String name = tag.getTagName().trim();
+                    if (!name.isBlank()) {
+                        skills.add(name);
+                    }
+                }
+            }
+        }
+
+        Set<String> cvSkills = toStringSet(parsedCv == null ? null : parsedCv.get("SKILLS"));
+        if (!jdText.isBlank() && !cvSkills.isEmpty()) {
+            String jdLower = jdText.toLowerCase(Locale.ROOT);
+            for (String skill : cvSkills) {
+                if (containsSkill(jdLower, skill)) {
+                    skills.add(skill);
+                }
+            }
+        }
+
+        if (experiences.isEmpty()) {
+            experiences.addAll(extractExperienceFromText(jdText));
+        }
+
+        if (!skills.isEmpty()) {
+            merged.put("SKILLS", skills.stream().toList());
+        }
+        if (!jobPosts.isEmpty()) {
+            merged.put("JOBPOST", jobPosts.stream().toList());
+        }
+        if (!experiences.isEmpty()) {
+            merged.put("EXPERIENCE", experiences.stream().toList());
+        }
+
+        return merged;
+    }
+
+    private String buildJdText(Job job) {
+        if (job == null) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (job.getTitle() != null) {
+            sb.append(job.getTitle()).append(' ');
+        }
+        if (job.getDescription() != null) {
+            sb.append(job.getDescription()).append(' ');
+        }
+        if (job.getRequirements() != null && !job.getRequirements().isEmpty()) {
+            for (var req : job.getRequirements()) {
+                if (req != null && req.getRequirementText() != null) {
+                    sb.append(req.getRequirementText()).append(' ');
+                }
+            }
+        }
+        return sb.toString().trim();
+    }
+
+    private Set<String> toStringSet(Object value) {
+        Set<String> out = new LinkedHashSet<>();
+        if (value == null) {
+            return out;
+        }
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                if (item != null) {
+                    String s = item.toString().trim();
+                    if (!s.isBlank()) {
+                        out.add(s);
+                    }
+                }
+            }
+            return out;
+        }
+        String s = value.toString().trim();
+        if (!s.isBlank()) {
+            out.add(s);
+        }
+        return out;
+    }
+
+    private boolean containsSkill(String jdLower, String skill) {
+        if (skill == null) {
+            return false;
+        }
+        String s = skill.trim();
+        if (s.isBlank()) {
+            return false;
+        }
+        String skillLower = s.toLowerCase(Locale.ROOT);
+        if (skillLower.contains(" ")) {
+            return jdLower.contains(skillLower);
+        }
+        Pattern pattern = Pattern.compile("\\b" + Pattern.quote(skillLower) + "\\b");
+        return pattern.matcher(jdLower).find();
+    }
+
+    private Set<String> extractExperienceFromText(String text) {
+        Set<String> out = new LinkedHashSet<>();
+        if (text == null || text.isBlank()) {
+            return out;
+        }
+        Pattern pattern = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(years?|months?)", Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(text);
+        while (matcher.find()) {
+            String value = matcher.group(1);
+            String unit = matcher.group(2);
+            out.add(value + " " + unit);
+        }
+        return out;
     }
 
     private Map<String, Object> resolveParsedJd(Job job) throws Exception {
