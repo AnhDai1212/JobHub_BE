@@ -17,4 +17,6 @@ public interface ApplicationRepository extends JpaRepository<Application, String
     Page<Application> findAllByJobSeeker_JobSeekerId(Integer jobSeekerId, Pageable pageable);
 
     boolean existsByJobSeeker_JobSeekerIdAndJob_JobId(Integer jobSeekerId, Integer jobId);
+
+    boolean existsByParsedCv_CvIdAndJob_Recruiter_RecruiterId(String cvId, Integer recruiterId);
 }

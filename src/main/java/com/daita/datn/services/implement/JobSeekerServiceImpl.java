@@ -12,6 +12,7 @@ import com.daita.datn.models.entities.CandidateSkill;
 import com.daita.datn.models.entities.JobSeeker;
 import com.daita.datn.models.entities.ParsedCv;
 import com.daita.datn.models.entities.auth.Account;
+import com.daita.datn.models.entities.Recruiter;
 import com.daita.datn.models.dto.CvParseResponse;
 import com.daita.datn.models.dto.ParsedCvDTO;
 import com.daita.datn.models.dto.ParsedCvSaveRequest;
@@ -30,6 +31,8 @@ import com.daita.datn.models.mappers.ParsedCvMapper;
 import com.daita.datn.services.S3StorageService;
 import com.daita.datn.common.utils.Util;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.daita.datn.repositories.ApplicationRepository;
+import com.daita.datn.repositories.RecruiterRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -66,6 +69,7 @@ public class JobSeekerServiceImpl implements JobSeekerService {
     JobSeekerRepository jobSeekerRepository;
     ParsedCvRepository parsedCvRepository;
     CandidateSkillRepository candidateSkillRepository;
+    ApplicationRepository applicationRepository;
     RoleService roleService;
     JobSeekerMapper jobSeekerMapper;
     CandidateSkillMapper candidateSkillMapper;
@@ -73,6 +77,7 @@ public class JobSeekerServiceImpl implements JobSeekerService {
     CloudinaryService cloudinaryService;
     ParsedCvMapper parsedCvMapper;
     ObjectMapper objectMapper;
+    RecruiterRepository recruiterRepository;
 
     @NonFinal
     @Value("${cv.parser.url}")
@@ -366,6 +371,38 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         }
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ParsedCvDTO getParsedCvById(String cvId) {
+        Account account = accountService.getCurrentAccount();
+        ParsedCv parsedCv = parsedCvRepository.findById(cvId)
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "ParsedCv"));
+
+        if (hasRole(account, RoleType.ADMIN)) {
+            return buildParsedCvDto(parsedCv);
+        }
+
+        if (hasRole(account, RoleType.JOB_SEEKER)) {
+            if (!Objects.equals(parsedCv.getJobSeeker().getAccount().getAccountId(), account.getAccountId())) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+            return buildParsedCvDto(parsedCv);
+        }
+
+        if (hasRole(account, RoleType.RECRUITER)) {
+            Recruiter recruiter = recruiterRepository.findByAccount_AccountId(account.getAccountId())
+                    .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Recruiter"));
+            boolean allowed = applicationRepository.existsByParsedCv_CvIdAndJob_Recruiter_RecruiterId(
+                    cvId, recruiter.getRecruiterId());
+            if (!allowed) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+            return buildParsedCvDto(parsedCv);
+        }
+
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+
     private JobSeekerDTO enrichWithCvUrl(JobSeeker jobSeeker) {
         JobSeekerDTO dto = jobSeekerMapper.toDto(jobSeeker);
         if (jobSeeker.getCvUrl() != null && !jobSeeker.getCvUrl().isBlank()) {
@@ -383,5 +420,31 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         Account account = accountService.getCurrentAccount();
         return jobSeekerRepository.findByAccount_AccountId(account.getAccountId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "JobSeeker"));
+    }
+
+    private ParsedCvDTO buildParsedCvDto(ParsedCv parsedCv) {
+        try {
+            Object parsedDataObj = objectMapper.readValue(parsedCv.getParsedJson(), Object.class);
+            ParsedCvDTO dto = parsedCvMapper.toDto(parsedCv, parsedDataObj);
+            if (dto.getFileUrl() != null && !dto.getFileUrl().isBlank()) {
+                dto.setFileUrl(
+                        s3StorageService.generatePresignedUrl(
+                                dto.getFileUrl(),
+                                Duration.ofMinutes(15)
+                        )
+                );
+            }
+            return dto;
+        } catch (IOException e) {
+            throw new AppException(ErrorCode.SERVER_ERROR, "Cannot parse stored cv");
+        }
+    }
+
+    private boolean hasRole(Account account, RoleType roleType) {
+        if (account == null || account.getRoles() == null) {
+            return false;
+        }
+        return account.getRoles().stream()
+                .anyMatch(role -> role != null && roleType.equals(role.getRoleName()));
     }
 }

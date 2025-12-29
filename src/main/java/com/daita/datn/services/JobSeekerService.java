@@ -36,4 +36,6 @@ public interface JobSeekerService {
     void deleteSkill(Integer skillId);
 
     ParsedCvDTO getLatestParsedCv();
+
+    ParsedCvDTO getParsedCvById(String cvId);
 }
