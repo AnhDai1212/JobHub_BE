@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Candidate Chat Test</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap");
+
+      :root {
+        --bg1: #f7f4ee;
+        --bg2: #efe7d8;
+        --ink: #1a1a1a;
+        --muted: #5a5248;
+        --accent: #0d6b5a;
+        --accent-2: #f05d5e;
+        --card: #ffffff;
+        --border: #e6dfd4;
+        --shadow: 0 18px 40px rgba(18, 18, 18, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: radial-gradient(1200px 600px at 10% 10%, var(--bg2), var(--bg1));
+        min-height: 100vh;
+      }
+
+      .wrap {
+        max-width: 980px;
+        margin: 48px auto;
+        padding: 0 20px 60px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+
+      .title {
+        font-size: 40px;
+        line-height: 1.05;
+        letter-spacing: -0.02em;
+        margin: 0 0 10px;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input,
+      textarea,
+      select {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        font-size: 14px;
+        font-family: inherit;
+        background: #fff;
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-top: 12px;
+      }
+
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: 0;
+        padding: 12px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 120ms ease, filter 120ms ease;
+      }
+
+      button:active {
+        transform: translateY(1px);
+      }
+
+      .ghost {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+      }
+
+      .result {
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 12px;
+        background: #f7f6f2;
+        border: 1px dashed var(--border);
+        font-size: 14px;
+        white-space: pre-wrap;
+      }
+
+      .pill {
+        display: inline-block;
+        font-size: 12px;
+        padding: 4px 10px;
+        background: #e7f3f0;
+        color: var(--accent);
+        border-radius: 999px;
+        margin-right: 6px;
+      }
+
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+
+      @media (max-width: 900px) {
+        .hero {
+          grid-template-columns: 1fr;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="hero">
+        <div>
+          <div class="pill">Recruiter QA</div>
+          <h1 class="title">Candidate Chat Matcher</h1>
+          <p class="subtitle">
+            Send criteria and let the API pick the best candidate in your job's application list.
+          </p>
+        </div>
+        <div class="card">
+          <label>Quick Example Prompt</label>
+          <div class="note">
+            "Find a candidate with 2 years Java, Spring Boot, strong backend experience and Git."
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <form id="chat-form">
+          <div class="form-grid">
+            <div>
+              <label for="baseUrl">API Base URL</label>
+              <input id="baseUrl" value="http://localhost:8080/api" />
+            </div>
+            <div>
+              <label for="jobId">Job ID</label>
+              <input id="jobId" placeholder="1" />
+            </div>
+            <div>
+              <label for="token">Bearer Token</label>
+              <input id="token" placeholder="Paste recruiter access token" />
+            </div>
+            <div>
+              <label for="timeout">Timeout (ms)</label>
+              <input id="timeout" value="20000" />
+            </div>
+          </div>
+
+          <div>
+            <label for="prompt">Prompt</label>
+            <textarea id="prompt" placeholder="Describe the criteria for the best candidate..."></textarea>
+          </div>
+
+          <div class="actions">
+            <button type="submit">Find Best Candidate</button>
+            <button type="button" class="ghost" id="clear">Clear</button>
+          </div>
+        </form>
+
+        <div id="result" class="result">Response will appear here.</div>
+      </div>
+    </div>
+
+    <script>
+      const form = document.getElementById("chat-form");
+      const result = document.getElementById("result");
+      const clearBtn = document.getElementById("clear");
+
+      clearBtn.addEventListener("click", () => {
+        document.getElementById("prompt").value = "";
+        result.textContent = "Response will appear here.";
+      });
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const baseUrl = document.getElementById("baseUrl").value.trim().replace(/\/+$/, "");
+        const jobId = document.getElementById("jobId").value.trim();
+        const token = document.getElementById("token").value.trim();
+        const prompt = document.getElementById("prompt").value.trim();
+        const timeout = parseInt(document.getElementById("timeout").value, 10) || 20000;
+
+        if (!baseUrl || !jobId || !prompt) {
+          result.textContent = "Please fill in baseUrl, jobId, and prompt.";
+          return;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeout);
+
+        try {
+          result.textContent = "Thinking...";
+          const res = await fetch(`${baseUrl}/jobs/${jobId}/candidates/chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ prompt }),
+            signal: controller.signal,
+          });
+
+          const data = await res.json();
+          result.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          result.textContent = `Error: ${err.message || err}`;
+        } finally {
+          clearTimeout(timer);
+        }
+      });
+    </script>
+  </body>
+</html>

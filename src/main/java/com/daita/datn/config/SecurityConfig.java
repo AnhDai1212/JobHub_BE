@@ -46,6 +46,7 @@ public class SecurityConfig {
 //            "/api/auth/upgrade-recruiter/**",
             "/api/companies",
             "/api/companies/**",
+            "/candidate-chat.html"
     };
 
     @Bean

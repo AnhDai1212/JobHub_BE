@@ -3,6 +3,8 @@ package com.daita.datn.controllers;
 import com.daita.datn.common.base.ApiResponse;
 import com.daita.datn.common.constants.MessageConstant;
 import com.daita.datn.models.dto.ApplicationDTO;
+import com.daita.datn.models.dto.CandidateChatRequest;
+import com.daita.datn.models.dto.CandidateChatResponse;
 import com.daita.datn.models.dto.BaseSearchDTO;
 import com.daita.datn.models.dto.JobCreateRequest;
 import com.daita.datn.models.dto.JobDTO;
@@ -11,6 +13,7 @@ import com.daita.datn.models.dto.JobStatusUpdateRequest;
 import com.daita.datn.models.dto.JobUpdateRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
 import com.daita.datn.services.JobService;
+import com.daita.datn.services.CandidateChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +28,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class JobController {
 
     private final JobService jobService;
+    private final CandidateChatService candidateChatService;
 
     @PostMapping
     @PreAuthorize("hasRole('RECRUITER')")
@@ -170,6 +174,21 @@ public class JobController {
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.APPLICATION_LIST_SUCCESS)
                 .data(applications)
+                .build();
+    }
+
+    @PostMapping("/{jobId}/candidates/chat")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ApiResponse<CandidateChatResponse> chatMatchCandidate(
+            @PathVariable Integer jobId,
+            @RequestBody @Valid CandidateChatRequest request
+    ) {
+        CandidateChatResponse response = candidateChatService.matchCandidate(jobId, request);
+        return ApiResponse.<CandidateChatResponse>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.CANDIDATE_CHAT_SUCCESS)
+                .data(response)
                 .build();
     }
 }

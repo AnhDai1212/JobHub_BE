@@ -21,7 +21,8 @@ public class Constant {
             "/api/companies/*/jobs",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            "/api/v3/api-docs/**"
+            "/api/v3/api-docs/**",
+            "/candidate-chat.html"
     };
     public static final String REFRESH_TOKEN_ENDPOINT = "/api/auth/refresh-token";
     public static final String REFRESH_TOKEN = "Refresh-Token";

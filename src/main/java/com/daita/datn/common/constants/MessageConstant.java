@@ -72,6 +72,7 @@ public class MessageConstant {
     public static final String FAVORITE_ADD_SUCCESS = "Favorite added successfully";
     public static final String FAVORITE_REMOVE_SUCCESS = "Favorite removed successfully";
     public static final String FAVORITE_LIST_SUCCESS = "Favorites fetched successfully";
+    public static final String CANDIDATE_CHAT_SUCCESS = "Candidate matched successfully";
 
     // Recruiter
     public static final String RECRUITER_FETCH_SUCCESS = "Recruiter fetched successfully";
