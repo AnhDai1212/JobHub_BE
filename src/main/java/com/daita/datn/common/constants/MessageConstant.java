@@ -61,6 +61,7 @@ public class MessageConstant {
     public static final String CV_PARSE_SUCCESS = "CV parsed successfully";
     public static final String PARSED_CV_SAVE_SUCCESS = "Parsed CV saved successfully";
     public static final String PARSED_CV_FETCH_SUCCESS = "Parsed CV fetched successfully";
+    public static final String DASHBOARD_CHARTS_FETCH_SUCCESS = "Dashboard charts fetched successfully";
     public static final String CV_UPLOAD_SUCCESS = "CV uploaded successfully";
     public static final String CV_DELETE_SUCCESS = "CV deleted successfully";
     public static final String SKILL_LIST_SUCCESS = "Skills fetched successfully";
