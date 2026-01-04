@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,6 +36,7 @@ public class RecruiterController {
     }
 
     @GetMapping("/me")
+    @PreAuthorize("hasRole('RECRUITER')")
     public ApiResponse<RecruiterProfileResponse> getCurrentRecruiter() {
         RecruiterProfileResponse response = recruiterService.getCurrentRecruiter();
 
@@ -47,6 +49,7 @@ public class RecruiterController {
     }
 
     @PostMapping("/consultations")
+    @PreAuthorize("hasRole('RECRUITER')")
     public ApiResponse<RecruiterConsultationResponse> saveConsultation(
             @RequestBody @Valid RecruiterConsultationRequest request
     ) {
@@ -63,7 +66,7 @@ public class RecruiterController {
             value = "/me/avatar",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('RECRUITER')")
+    @PreAuthorize("hasRole('RECRUITER')")
     public ApiResponse<RecruiterProfileResponse> updateAvatar(
             @RequestPart("avatar") MultipartFile avatar
     ) throws IOException {
@@ -77,6 +80,7 @@ public class RecruiterController {
     }
 
     @PostMapping("/search")
+    @PreAuthorize("hasRole('RECRUITER')")
     public ApiResponse<PageListDTO<RecruiterDTO>> searchRecruiters(
             @RequestBody BaseSearchDTO<RecruiterDTO> request
     ) {

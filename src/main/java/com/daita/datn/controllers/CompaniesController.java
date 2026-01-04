@@ -15,6 +15,7 @@ import com.daita.datn.services.JobService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -29,6 +30,7 @@ public class CompaniesController {
     private final JobService jobService;
 
     @PostMapping()
+    @PreAuthorize("hasAnyRole('RECRUITER','ADMIN')")
     public ApiResponse<CompanyResponseDTO> createCompany(@RequestBody CompanyRequestDTO requestDTO) {
         return ApiResponse.<CompanyResponseDTO>builder()
                 .code(HttpStatus.CREATED.value())
@@ -76,6 +78,7 @@ public class CompaniesController {
     }
 
     @PatchMapping("/{companyId}")
+    @PreAuthorize("hasAnyRole('RECRUITER','ADMIN')")
     public ApiResponse<CompanyResponseDTO> updateCompanyInfo(
             @PathVariable Integer companyId,
             @RequestBody CompanyUpdateDTO requestDTO
@@ -94,6 +97,7 @@ public class CompaniesController {
             value = "/{companyId}/avatar",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
+    @PreAuthorize("hasAnyRole('RECRUITER','ADMIN')")
     public ApiResponse<CompanyResponseDTO> updateCompanyAvatar(
             @PathVariable Integer companyId,
             @RequestPart("avatar") MultipartFile avatar
@@ -110,6 +114,7 @@ public class CompaniesController {
     }
 
     @DeleteMapping("/{companyId}")
+    @PreAuthorize("hasAnyRole('RECRUITER','ADMIN')")
     public ApiResponse<CompanyResponseDTO> deleteCompany(@PathVariable Integer companyId) {
 
         companyService.deleteCompany(companyId);

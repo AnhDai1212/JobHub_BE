@@ -3,6 +3,7 @@ package com.daita.datn.services.implement;
 import com.daita.datn.common.constants.Constant;
 import com.daita.datn.common.utils.Util;
 import com.daita.datn.enums.ErrorCode;
+import com.daita.datn.enums.ApplicationStatus;
 import com.daita.datn.enums.JobStatus;
 import com.daita.datn.enums.RecruiterStatus;
 import com.daita.datn.exceptions.AppException;
@@ -480,6 +481,13 @@ public class JobServiceImpl implements JobService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
+        if (request.getStatus() == ApplicationStatus.WITHDRAWN) {
+            throw new AppException(ErrorCode.OPERATION_NOT_ALLOWED, "Recruiter cannot withdraw application");
+        }
+
+        ApplicationStatus currentStatus = ApplicationStatus.valueOf(application.getStatus());
+        validateApplicationStatusTransition(currentStatus, request.getStatus());
+
         applicationMapper.updateStatus(request, application);
 
         ApplicationHistory history = applicationMapper.toHistoryEntity(application, request);
@@ -491,6 +499,33 @@ public class JobServiceImpl implements JobService {
         Application saved = applicationRepository.save(application);
 
         return applicationMapper.toDto(saved);
+    }
+
+    private void validateApplicationStatusTransition(ApplicationStatus from, ApplicationStatus to) {
+        if (from == to) {
+            return;
+        }
+        switch (from) {
+            case APPLIED -> {
+                if (to != ApplicationStatus.REVIEWING) {
+                    throw new AppException(ErrorCode.OPERATION_NOT_ALLOWED, "Invalid status transition");
+                }
+            }
+            case REVIEWING -> {
+                if (to != ApplicationStatus.SHORTLIST && to != ApplicationStatus.REJECTED) {
+                    throw new AppException(ErrorCode.OPERATION_NOT_ALLOWED, "Invalid status transition");
+                }
+            }
+            case SHORTLIST -> {
+                if (to != ApplicationStatus.HIRED && to != ApplicationStatus.REJECTED) {
+                    throw new AppException(ErrorCode.OPERATION_NOT_ALLOWED, "Invalid status transition");
+                }
+            }
+            case REJECTED, HIRED, WITHDRAWN -> throw new AppException(
+                    ErrorCode.OPERATION_NOT_ALLOWED,
+                    "Cannot transition from terminal status"
+            );
+        }
     }
 
     @Override

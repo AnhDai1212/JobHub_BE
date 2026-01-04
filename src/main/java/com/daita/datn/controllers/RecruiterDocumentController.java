@@ -8,6 +8,7 @@ import com.daita.datn.services.RecruiterDocumentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/recruiters/documents")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('RECRUITER')")
 public class RecruiterDocumentController {
 
     private final RecruiterDocumentService recruiterDocumentService;

@@ -14,12 +14,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/admin/dashboard")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminDashboardController {
 
     private final AdminDashboardService adminDashboardService;
 
     @GetMapping("/charts")
-    @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<AdminDashboardChartDTO> getDashboardCharts() {
         AdminDashboardChartDTO dto = adminDashboardService.getDashboardCharts();
         return ApiResponse.<AdminDashboardChartDTO>builder()

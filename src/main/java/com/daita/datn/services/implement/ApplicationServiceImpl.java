@@ -130,6 +130,13 @@ public class ApplicationServiceImpl implements ApplicationService {
         Application application = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Application"));
 
+        ApplicationStatus currentStatus = ApplicationStatus.valueOf(application.getStatus());
+        if (currentStatus != ApplicationStatus.APPLIED
+                && currentStatus != ApplicationStatus.REVIEWING
+                && currentStatus != ApplicationStatus.SHORTLIST) {
+            throw new AppException(ErrorCode.OPERATION_NOT_ALLOWED, "Cannot withdraw at current status");
+        }
+
         if (!application.getJobSeeker().getJobSeekerId().equals(jobSeeker.getJobSeekerId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }

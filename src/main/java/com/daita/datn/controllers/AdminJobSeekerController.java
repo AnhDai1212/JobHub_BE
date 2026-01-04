@@ -7,11 +7,13 @@ import com.daita.datn.models.dto.JobSeekerDTO;
 import com.daita.datn.services.AdminJobSeekerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/admin/job-seekers")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminJobSeekerController {
 
     private final AdminJobSeekerService adminJobSeekerService;
