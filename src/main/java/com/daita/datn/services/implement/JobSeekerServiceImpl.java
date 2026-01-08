@@ -23,6 +23,7 @@ import com.daita.datn.repositories.ParsedCvRepository;
 import com.daita.datn.repositories.JobSeekerRepository;
 import com.daita.datn.repositories.CandidateSkillRepository;
 import com.daita.datn.services.AccountService;
+import com.daita.datn.services.EmbeddingService;
 import com.daita.datn.services.JobSeekerService;
 import com.daita.datn.services.RoleService;
 import com.daita.datn.services.CloudinaryService;
@@ -78,6 +79,7 @@ public class JobSeekerServiceImpl implements JobSeekerService {
     ParsedCvMapper parsedCvMapper;
     ObjectMapper objectMapper;
     RecruiterRepository recruiterRepository;
+    EmbeddingService embeddingService;
 
     @NonFinal
     @Value("${cv.parser.url}")
@@ -229,6 +231,11 @@ public class JobSeekerServiceImpl implements JobSeekerService {
 
             String cvId = UUID.randomUUID().toString();
             ParsedCv entity = parsedCvMapper.toEntity(request, jobSeeker, cvId, parsedJson);
+
+            String embeddingJson = toEmbeddingJson(embeddingService.embedText(request.getRawText()));
+            if (embeddingJson != null) {
+                entity.setEmbedding(embeddingJson);
+            }
 
             ParsedCv saved = parsedCvRepository.save(entity);
 
@@ -446,5 +453,17 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         }
         return account.getRoles().stream()
                 .anyMatch(role -> role != null && roleType.equals(role.getRoleName()));
+    }
+
+    private String toEmbeddingJson(java.util.List<Double> embedding) {
+        if (embedding == null || embedding.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(embedding);
+        } catch (Exception e) {
+            logger.warn("Failed to serialize CV embedding: {}", e.getMessage());
+            return null;
+        }
     }
 }

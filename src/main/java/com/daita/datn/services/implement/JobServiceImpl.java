@@ -41,9 +41,11 @@ import com.daita.datn.models.mappers.JobMapper;
 import com.daita.datn.models.mappers.JobRequirementMapper;
 import com.daita.datn.models.mappers.ApplicationMapper;
 import com.daita.datn.services.AccountService;
+import com.daita.datn.services.EmbeddingService;
 import com.daita.datn.services.JobService;
 import com.daita.datn.services.S3StorageService;
 import com.daita.datn.models.dto.pagination.PaginationDTO;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,6 +106,7 @@ public class JobServiceImpl implements JobService {
     NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     ObjectMapper objectMapper;
     S3StorageService s3StorageService;
+    EmbeddingService embeddingService;
 
     @NonFinal
     @Value("${cv.parser.url}")
@@ -134,6 +137,7 @@ public class JobServiceImpl implements JobService {
         Job job = jobMapper.toEntity(request, company, recruiter);
         applyTagsAndCategories(job, request.getTagIds(), request.getCategoryIds());
         applyRequirements(job, request.getRequirements());
+        applyJobEmbedding(job);
 
         Job saved = jobRepository.save(job);
 
@@ -187,7 +191,7 @@ public class JobServiceImpl implements JobService {
         Specification<Job> spec = Util.<Job>buildSearchSpec(
                         keyword,
                         Constant.JOB_SEARCH_FIELDS,
-                        null,
+                        Constant.JOB_FETCH_RELATIONS,
                         null
                 ).and((root, query, cb) -> {
                     Predicate recruiterPredicate =
@@ -217,7 +221,7 @@ public class JobServiceImpl implements JobService {
         Specification<Job> spec = Util.<Job>buildSearchSpec(
                 keyword,
                 Constant.JOB_SEARCH_FIELDS,
-                null,
+                Constant.JOB_FETCH_RELATIONS,
                 null
         ).and((root, query, cb) -> buildFilterPredicate(root, query, cb, request.getFilter()));
 
@@ -242,7 +246,7 @@ public class JobServiceImpl implements JobService {
         Specification<Job> spec = Util.<Job>buildSearchSpec(
                         keyword,
                         Constant.JOB_SEARCH_FIELDS,
-                        null,
+                        Constant.JOB_FETCH_RELATIONS,
                         null
                 ).and((root, query, cb) -> {
                     Predicate companyPredicate =
@@ -274,7 +278,7 @@ public class JobServiceImpl implements JobService {
         JobSeeker jobSeeker = jobSeekerRepository.findByAccount_AccountId(account.getAccountId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "JobSeeker"));
 
-        String cvText = buildCvText(jobSeeker);
+        CvText cvText = buildCvTextWithSource(jobSeeker);
 
         String sql = "SELECT j.job_id, "
                 + "  ( "
@@ -306,7 +310,7 @@ public class JobServiceImpl implements JobService {
 
         Map<String, Object> params = new HashMap<>();
         params.put("jobSeekerId", jobSeeker.getJobSeekerId());
-        params.put("cvText", cvText);
+        params.put("cvText", cvText.text());
         params.put("limit", pageSize);
         params.put("offset", offset);
 
@@ -323,15 +327,36 @@ public class JobServiceImpl implements JobService {
         }
 
         List<Integer> jobIds = rows.stream().map(JobScoreRow::jobId).toList();
-        Map<Integer, Integer> orderIndex = new HashMap<>();
-        for (int i = 0; i < jobIds.size(); i++) {
-            orderIndex.put(jobIds.get(i), i);
+        Map<Integer, Double> baseScores = new HashMap<>();
+        for (JobScoreRow row : rows) {
+            baseScores.put(row.jobId(), row.score());
         }
 
         List<Job> jobs = jobRepository.findAllById(jobIds);
-        jobs.sort(Comparator.comparingInt(job -> orderIndex.getOrDefault(job.getJobId(), Integer.MAX_VALUE)));
+        List<Double> cvEmbedding = resolveCvEmbedding(cvText);
+        boolean hasSemantic = cvEmbedding != null && !cvEmbedding.isEmpty();
 
-        List<JobDTO> dtos = jobMapper.toDtoList(jobs);
+        List<ScoredJob> scoredJobs = new ArrayList<>();
+        for (Job job : jobs) {
+            double baseScore = baseScores.getOrDefault(job.getJobId(), 0d);
+            double combinedScore = baseScore;
+            if (hasSemantic && job.getEmbedding() != null && !job.getEmbedding().isBlank()) {
+                List<Double> jobEmbedding = parseEmbedding(job.getEmbedding());
+                if (!jobEmbedding.isEmpty()) {
+                    double semanticScore = cosineSimilarity(cvEmbedding, jobEmbedding);
+                    combinedScore = Constant.RECOMMEND_BASE_WEIGHT * baseScore
+                            + Constant.RECOMMEND_SEMANTIC_WEIGHT * semanticScore;
+                }
+            }
+            scoredJobs.add(new ScoredJob(job, combinedScore));
+        }
+
+        scoredJobs.sort(Comparator.comparingDouble(ScoredJob::score).reversed()
+                .thenComparing(scored -> scored.job().getCreateAt(),
+                        Comparator.nullsLast(Comparator.reverseOrder())));
+
+        List<Job> orderedJobs = scoredJobs.stream().map(ScoredJob::job).toList();
+        List<JobDTO> dtos = jobMapper.toDtoList(orderedJobs);
         int total = (int) jobRepository.count((root, query, cb) ->
                 cb.equal(root.get("status"), JobStatus.OPEN.name()));
         return new PageListDTO<>(dtos, total);
@@ -359,6 +384,9 @@ public class JobServiceImpl implements JobService {
         jobMapper.updateJobFromRequest(request, job);
         applyTagsAndCategories(job, request.getTagIds(), request.getCategoryIds());
         applyRequirements(job, request.getRequirements());
+        if (request.getTitle() != null || request.getDescription() != null) {
+            applyJobEmbedding(job);
+        }
 
         Job saved = jobRepository.save(job);
 
@@ -707,25 +735,107 @@ public class JobServiceImpl implements JobService {
         return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
     }
 
-    private String buildCvText(JobSeeker jobSeeker) {
+    private CvText buildCvTextWithSource(JobSeeker jobSeeker) {
         ParsedCv parsedCv = parsedCvRepository
                 .findTopByJobSeeker_JobSeekerIdOrderByCreateAtDesc(jobSeeker.getJobSeekerId())
                 .orElse(null);
 
         if (parsedCv != null && parsedCv.getExtractedText() != null && !parsedCv.getExtractedText().isBlank()) {
-            return parsedCv.getExtractedText();
+            return new CvText(parsedCv, parsedCv.getExtractedText());
         }
 
         if (jobSeeker.getSkills() != null && !jobSeeker.getSkills().isEmpty()) {
-            return jobSeeker.getSkills().stream()
+            String text = jobSeeker.getSkills().stream()
                     .map(skill -> skill.getSkillName() == null ? "" : skill.getSkillName().trim())
                     .filter(s -> !s.isBlank())
                     .distinct()
                     .reduce((a, b) -> a + " " + b)
                     .orElse(" ");
+            return new CvText(parsedCv, text);
         }
 
-        return " ";
+        return new CvText(parsedCv, " ");
+    }
+
+    private List<Double> resolveCvEmbedding(CvText cvText) {
+        if (cvText == null) {
+            return null;
+        }
+        ParsedCv parsedCv = cvText.parsedCv();
+        if (parsedCv != null && parsedCv.getEmbedding() != null && !parsedCv.getEmbedding().isBlank()) {
+            List<Double> parsed = parseEmbedding(parsedCv.getEmbedding());
+            if (!parsed.isEmpty()) {
+                return parsed;
+            }
+        }
+
+        List<Double> embedding = embeddingService.embedText(cvText.text());
+        if (embedding == null || embedding.isEmpty()) {
+            return null;
+        }
+        return embedding;
+    }
+
+    private void applyJobEmbedding(Job job) {
+        if (job == null) {
+            return;
+        }
+        String text = buildJobEmbeddingText(job);
+        String embeddingJson = toEmbeddingJson(embeddingService.embedText(text));
+        if (embeddingJson != null) {
+            job.setEmbedding(embeddingJson);
+        }
+    }
+
+    private String buildJobEmbeddingText(Job job) {
+        String title = job.getTitle() == null ? "" : job.getTitle().trim();
+        String description = job.getDescription() == null ? "" : job.getDescription().trim();
+        String combined = (title + " " + description).trim();
+        return combined.isBlank() ? " " : combined;
+    }
+
+    private String toEmbeddingJson(List<Double> embedding) {
+        if (embedding == null || embedding.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(embedding);
+        } catch (Exception e) {
+            logger.warn("Failed to serialize embedding: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<Double> parseEmbedding(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Double>>() {});
+        } catch (Exception e) {
+            logger.warn("Failed to parse embedding JSON: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private double cosineSimilarity(List<Double> a, List<Double> b) {
+        if (a == null || b == null || a.isEmpty() || b.isEmpty() || a.size() != b.size()) {
+            return 0d;
+        }
+        double dot = 0d;
+        double normA = 0d;
+        double normB = 0d;
+        for (int i = 0; i < a.size(); i++) {
+            double x = a.get(i);
+            double y = b.get(i);
+            dot += x * y;
+            normA += x * x;
+            normB += y * y;
+        }
+        if (normA == 0d || normB == 0d) {
+            return 0d;
+        }
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
     private void tryParseAndStoreJd(Job job) {
@@ -822,4 +932,8 @@ public class JobServiceImpl implements JobService {
     }
 
     private record JobScoreRow(Integer jobId, Double score) {}
+
+    private record ScoredJob(Job job, Double score) {}
+
+    private record CvText(ParsedCv parsedCv, String text) {}
 }

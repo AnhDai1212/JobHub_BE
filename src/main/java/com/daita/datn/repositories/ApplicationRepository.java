@@ -4,6 +4,9 @@ import com.daita.datn.models.entities.Application;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,6 +15,18 @@ import java.util.List;
 public interface ApplicationRepository extends JpaRepository<Application, String> {
     List<Application> findAllByJob_JobId(Integer jobId);
 
+    @Query("""
+            select distinct a
+            from Application a
+            join fetch a.jobSeeker js
+            left join fetch js.skills
+            left join fetch js.account
+            left join fetch a.parsedCv
+            where a.job.jobId = :jobId
+            """)
+    List<Application> findAllByJob_JobIdWithCandidates(@Param("jobId") Integer jobId);
+
+    @EntityGraph(attributePaths = {"jobSeeker", "parsedCv"})
     Page<Application> findAllByJob_JobId(Integer jobId, Pageable pageable);
 
     Page<Application> findAllByJobSeeker_JobSeekerId(Integer jobSeekerId, Pageable pageable);

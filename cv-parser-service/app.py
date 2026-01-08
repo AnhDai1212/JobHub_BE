@@ -9,16 +9,19 @@ import spacy
 import requests
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
+from sentence_transformers import SentenceTransformer
 
 
 RESUME_MODEL_PATH = os.getenv("RESUME_MODEL_PATH", "assets/ResumeModel/output/model-best")
 JD_MODEL_PATH = os.getenv("JD_MODEL_PATH", "assets/JdModel/output/model-best")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-mpnet-base-v2")
 
 app = FastAPI(title="CV/JD Parser Service", version="0.1.0")
 
 # Load models once on startup
 resume_model = spacy.load(RESUME_MODEL_PATH)
 jd_model = spacy.load(JD_MODEL_PATH)
+embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
 @app.get("/health")
 async def health():
@@ -35,6 +38,11 @@ class RankRequest(BaseModel):
     parsedCv: dict
     parsedJd: dict
     weights: RankWeights = RankWeights()
+
+
+class EmbeddingRequest(BaseModel):
+    input: str
+    model: Optional[str] = None
 
 
 def _extract_text_from_pdf(data: bytes) -> str:
@@ -422,3 +430,12 @@ async def rank(req: RankRequest):
         "titleScore": round(title_score, 4),
         "weights": w,
     }
+
+
+@app.post("/embedding")
+async def embedding(req: EmbeddingRequest):
+    text = (req.input or "").strip()
+    if not text:
+        return {"data": [{"embedding": []}], "model": EMBEDDING_MODEL_NAME}
+    vector = embedding_model.encode(text, normalize_embeddings=True)
+    return {"data": [{"embedding": vector.tolist()}], "model": EMBEDDING_MODEL_NAME}

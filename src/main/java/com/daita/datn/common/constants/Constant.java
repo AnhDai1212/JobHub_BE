@@ -69,6 +69,12 @@ public class Constant {
     public static final Set<String> RECRUITER_FETCH_RELATIONS =
             Set.of("account", "company");
 
+    public static final Set<String> JOB_FETCH_RELATIONS =
+            Set.of("company", "recruiter", "categories", "tags", "requirements");
+
+    public static final double RECOMMEND_BASE_WEIGHT = 0.7;
+    public static final double RECOMMEND_SEMANTIC_WEIGHT = 0.3;
+
     // File upload constraints (reuse across services)
     public static final long MAX_UPLOAD_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
     public static final Set<String> ALLOWED_DOC_CONTENT_TYPES = Set.of(

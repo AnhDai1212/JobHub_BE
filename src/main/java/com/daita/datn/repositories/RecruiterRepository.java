@@ -5,6 +5,8 @@ import com.daita.datn.models.entities.Recruiter;
 import com.daita.datn.enums.RecruiterStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -18,7 +20,14 @@ public interface RecruiterRepository extends JpaRepository<Recruiter,Integer>, J
 
     Optional<Recruiter> findByAccount_AccountId(String accountId);
 
-    List<Recruiter> findAllByStatus(RecruiterStatus status);
+    @Query("""
+            select r
+            from Recruiter r
+            join fetch r.account
+            left join fetch r.company
+            where r.status = :status
+            """)
+    List<Recruiter> findAllByStatus(@Param("status") RecruiterStatus status);
 
     Optional<Recruiter> findByRecruiterId(Integer recruiterId);
 }

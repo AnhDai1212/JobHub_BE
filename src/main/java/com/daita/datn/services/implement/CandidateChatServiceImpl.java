@@ -81,7 +81,7 @@ public class CandidateChatServiceImpl implements CandidateChatService {
         Job job = jobRepository.findByJobIdAndRecruiter_RecruiterId(jobId, recruiter.getRecruiterId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Job"));
 
-        List<Application> applications = applicationRepository.findAllByJob_JobId(job.getJobId());
+        List<Application> applications = applicationRepository.findAllByJob_JobIdWithCandidates(job.getJobId());
         if (applications.isEmpty()) {
             throw new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Application");
         }
