@@ -13,6 +13,11 @@ import java.util.List;
 
 @Repository
 public interface ApplicationRepository extends JpaRepository<Application, String> {
+    interface JobApplicationCount {
+        Integer getJobId();
+        Long getCount();
+    }
+
     List<Application> findAllByJob_JobId(Integer jobId);
 
     @Query("""
@@ -28,6 +33,18 @@ public interface ApplicationRepository extends JpaRepository<Application, String
 
     @EntityGraph(attributePaths = {"jobSeeker", "parsedCv"})
     Page<Application> findAllByJob_JobId(Integer jobId, Pageable pageable);
+
+    @Query("""
+            select a.job.jobId as jobId, count(a) as count
+            from Application a
+            where a.job.recruiter.recruiterId = :recruiterId
+              and a.job.jobId in :jobIds
+            group by a.job.jobId
+            """)
+    List<JobApplicationCount> countByJobIdsForRecruiter(
+            @Param("recruiterId") Integer recruiterId,
+            @Param("jobIds") List<Integer> jobIds
+    );
 
     Page<Application> findAllByJobSeeker_JobSeekerId(Integer jobSeekerId, Pageable pageable);
 

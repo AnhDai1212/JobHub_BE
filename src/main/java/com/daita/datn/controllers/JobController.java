@@ -9,6 +9,7 @@ import com.daita.datn.models.dto.BaseSearchDTO;
 import com.daita.datn.models.dto.JobCreateRequest;
 import com.daita.datn.models.dto.JobDTO;
 import com.daita.datn.models.dto.JobFilterDTO;
+import com.daita.datn.models.dto.JobApplicationsCountRequest;
 import com.daita.datn.models.dto.JobStatusUpdateRequest;
 import com.daita.datn.models.dto.JobUpdateRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Map;
 @RestController
 @RequestMapping("/jobs")
 @RequiredArgsConstructor
@@ -174,6 +176,20 @@ public class JobController {
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.APPLICATION_LIST_SUCCESS)
                 .data(applications)
+                .build();
+    }
+
+    @PostMapping("/applications/count")
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ApiResponse<Map<Integer, Long>> countApplications(
+            @RequestBody JobApplicationsCountRequest request
+    ) {
+        Map<Integer, Long> counts = jobService.countApplicationsForRecruiter(request);
+        return ApiResponse.<Map<Integer, Long>>builder()
+                .code(HttpStatus.OK.value())
+                .status(HttpStatus.OK.getReasonPhrase())
+                .message(MessageConstant.APPLICATION_COUNT_SUCCESS)
+                .data(counts)
                 .build();
     }
 

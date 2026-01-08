@@ -9,7 +9,9 @@ import com.daita.datn.models.dto.JobStatusUpdateRequest;
 import com.daita.datn.models.dto.BaseSearchDTO;
 import com.daita.datn.models.dto.ApplicationDetailDTO;
 import com.daita.datn.models.dto.ApplicationStatusUpdateRequest;
+import com.daita.datn.models.dto.JobApplicationsCountRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
+import java.util.Map;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface JobService {
@@ -40,4 +42,6 @@ public interface JobService {
     ApplicationDTO updateApplicationStatus(String applicationId, ApplicationStatusUpdateRequest request);
 
     JobDTO uploadJobJd(Integer jobId, MultipartFile file);
+
+    Map<Integer, Long> countApplicationsForRecruiter(JobApplicationsCountRequest request);
 }

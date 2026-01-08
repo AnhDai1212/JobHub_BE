@@ -41,6 +41,7 @@ public class MessageConstant {
     public static final String APPLICATION_FETCH_SUCCESS = "Application fetched successfully";
     public static final String APPLICATION_STATUS_UPDATE_SUCCESS = "Application status updated successfully";
     public static final String APPLICATION_LIST_SUCCESS = "Application list fetched successfully";
+    public static final String APPLICATION_COUNT_SUCCESS = "Application count fetched successfully";
 
     // Job
     public static final String JOB_CREATE_SUCCESS = "Job created successfully";

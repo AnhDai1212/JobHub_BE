@@ -17,6 +17,7 @@ import com.daita.datn.models.dto.JobStatusUpdateRequest;
 import com.daita.datn.models.dto.ApplicationDetailDTO;
 import com.daita.datn.models.dto.ApplicationHistoryDTO;
 import com.daita.datn.models.dto.ApplicationStatusUpdateRequest;
+import com.daita.datn.models.dto.JobApplicationsCountRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
 import com.daita.datn.models.entities.Company;
 import com.daita.datn.models.entities.Job;
@@ -527,6 +528,45 @@ public class JobServiceImpl implements JobService {
         Application saved = applicationRepository.save(application);
 
         return applicationMapper.toDto(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Integer, Long> countApplicationsForRecruiter(JobApplicationsCountRequest request) {
+        if (request == null || request.getJobIds() == null || request.getJobIds().isEmpty()) {
+            return Map.of();
+        }
+
+        Account account = accountService.getCurrentAccount();
+        Recruiter recruiter = recruiterRepository
+                .findByAccount_AccountId(account.getAccountId())
+                .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Recruiter"));
+        assertApproved(recruiter);
+
+        List<Integer> jobIds = request.getJobIds()
+                .stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (jobIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, Long> counts = new HashMap<>();
+        for (Integer jobId : jobIds) {
+            counts.put(jobId, 0L);
+        }
+
+        List<ApplicationRepository.JobApplicationCount> rows =
+                applicationRepository.countByJobIdsForRecruiter(recruiter.getRecruiterId(), jobIds);
+
+        for (ApplicationRepository.JobApplicationCount row : rows) {
+            if (row.getJobId() != null && row.getCount() != null) {
+                counts.put(row.getJobId(), row.getCount());
+            }
+        }
+
+        return counts;
     }
 
     private void validateApplicationStatusTransition(ApplicationStatus from, ApplicationStatus to) {
