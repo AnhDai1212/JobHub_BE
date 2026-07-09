@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -51,4 +52,12 @@ public interface ApplicationRepository extends JpaRepository<Application, String
     boolean existsByJobSeeker_JobSeekerIdAndJob_JobId(Integer jobSeekerId, Integer jobId);
 
     boolean existsByParsedCv_CvIdAndJob_Recruiter_RecruiterId(String cvId, Integer recruiterId);
+
+    @Modifying
+    @Query("""
+            update Application a
+            set a.parsedCv = null
+            where a.jobSeeker.jobSeekerId = :jobSeekerId
+            """)
+    int clearParsedCvForJobSeeker(@Param("jobSeekerId") Integer jobSeekerId);
 }

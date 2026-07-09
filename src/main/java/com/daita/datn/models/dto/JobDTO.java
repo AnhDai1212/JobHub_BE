@@ -27,4 +27,5 @@ public class JobDTO {
     private Set<String> categories;
     private Set<String> tags;
     private List<String> requirements;
+    private Double recommendScore;
 }

@@ -60,7 +60,8 @@ public class Util {
     ) {
         return (root, query, cb) -> {
 
-            if (fetchRelations != null && !fetchRelations.isEmpty()) {
+            boolean isCountQuery = query.getResultType() == Long.class || query.getResultType() == long.class;
+            if (!isCountQuery && fetchRelations != null && !fetchRelations.isEmpty()) {
                 for (String relation : fetchRelations) {
                     FetchParent<?, ?> fetch = root;
                     for (String part : relation.split("\\.")) {

@@ -80,7 +80,7 @@ public class RecruiterController {
     }
 
     @PostMapping("/search")
-    @PreAuthorize("hasRole('RECRUITER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'RECRUITER')")
     public ApiResponse<PageListDTO<RecruiterDTO>> searchRecruiters(
             @RequestBody BaseSearchDTO<RecruiterDTO> request
     ) {

@@ -15,6 +15,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class JobFilterDTO {
+    private List<String> statuses;
     private List<String> locations;
     private List<JobType> jobTypes;
     private Double salaryMin;

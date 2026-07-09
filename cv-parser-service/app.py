@@ -1,7 +1,7 @@
 import io
 import os
 import re
-from typing import Optional, List
+from typing import Optional, List, Callable, Dict
 
 import docx2txt
 import fitz  # PyMuPDF
@@ -15,6 +15,8 @@ from sentence_transformers import SentenceTransformer
 RESUME_MODEL_PATH = os.getenv("RESUME_MODEL_PATH", "assets/ResumeModel/output/model-best")
 JD_MODEL_PATH = os.getenv("JD_MODEL_PATH", "assets/JdModel/output/model-best")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-mpnet-base-v2")
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[A-Za-z]{2,}")
+PHONE_PATTERN = re.compile(r"(?:\+?\d[\d\s().-]{6,}\d)")
 
 app = FastAPI(title="CV/JD Parser Service", version="0.1.0")
 
@@ -74,6 +76,80 @@ def _parse_with_model(model, text: str) -> dict:
     for ent in doc.ents:
         out.setdefault(ent.label_, []).append(ent.text)
     return out
+
+
+def _normalize_whitespace(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _normalize_default(text: str) -> str:
+    return _normalize_whitespace(text).lower()
+
+
+def _normalize_email(text: str) -> str:
+    return _normalize_whitespace(text).lower()
+
+
+def _normalize_phone(text: str) -> str:
+    return re.sub(r"\D", "", text)
+
+
+def _dedupe_values(label: str, values: List[str]) -> List[str]:
+    normalizers: Dict[str, Callable[[str], str]] = {
+        "EMAIL ADDRESS": _normalize_email,
+        "CONTACT": _normalize_phone,
+        "PHONE": _normalize_phone,
+    }
+    normalize = normalizers.get(label, _normalize_default)
+    seen = set()
+    out = []
+    for value in values:
+        raw = str(value).strip()
+        if not raw:
+            continue
+        key = normalize(raw)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(raw)
+    return out
+
+
+def _dedupe_entities(entities: dict) -> dict:
+    if not entities:
+        return entities
+    for key, value in list(entities.items()):
+        if isinstance(value, list):
+            entities[key] = _dedupe_values(key, value)
+    return entities
+
+
+def _extract_emails(text: str) -> List[str]:
+    return _dedupe_values("EMAIL ADDRESS", EMAIL_PATTERN.findall(text))
+
+
+def _extract_phones(text: str) -> List[str]:
+    matches = []
+    for match in PHONE_PATTERN.finditer(text):
+        raw = match.group().strip()
+        digits = _normalize_phone(raw)
+        if 7 <= len(digits) <= 20:
+            matches.append(digits)
+    return _dedupe_values("CONTACT", matches)
+
+
+def _merge_contact_fallbacks(entities: dict, text: str) -> dict:
+    if not text:
+        return entities
+    emails = _extract_emails(text)
+    if emails:
+        existing = entities.get("EMAIL ADDRESS") or []
+        entities["EMAIL ADDRESS"] = _dedupe_values("EMAIL ADDRESS", existing + emails)
+    phones = _extract_phones(text)
+    if phones:
+        existing = entities.get("CONTACT") or []
+        entities["CONTACT"] = _dedupe_values("CONTACT", existing + phones)
+    return entities
 
 
 def _extract_skills_from_text(text: str) -> List[str]:
@@ -337,6 +413,8 @@ def _get_summary(title: str) -> Optional[str]:
 async def parse_cv(file: UploadFile = File(...), text: Optional[str] = Form(None)):
     raw_text = text or _extract_text(file)
     entities = _parse_with_model(resume_model, raw_text)
+    entities = _merge_contact_fallbacks(entities, raw_text)
+    entities = _dedupe_entities(entities)
     return {"rawText": raw_text, "entities": entities}
 
 
@@ -352,6 +430,8 @@ async def parse_jd(file: Optional[UploadFile] = File(None), text: Optional[str] 
     if fallback_skills:
         existing = entities.get("SKILLS") or []
         entities["SKILLS"] = _dedupe_skills(existing + fallback_skills)
+    entities = _merge_contact_fallbacks(entities, raw_text)
+    entities = _dedupe_entities(entities)
     return {"rawText": raw_text, "entities": entities}
 
 

@@ -229,6 +229,9 @@ public class JobSeekerServiceImpl implements JobSeekerService {
         try {
             String parsedJson = objectMapper.writeValueAsString(request.getParsedData());
 
+            applicationRepository.clearParsedCvForJobSeeker(jobSeeker.getJobSeekerId());
+            parsedCvRepository.deleteByJobSeeker_JobSeekerId(jobSeeker.getJobSeekerId());
+
             String cvId = UUID.randomUUID().toString();
             ParsedCv entity = parsedCvMapper.toEntity(request, jobSeeker, cvId, parsedJson);
 
@@ -367,7 +370,7 @@ public class JobSeekerServiceImpl implements JobSeekerService {
     public ParsedCvDTO getLatestParsedCv() {
         JobSeeker jobSeeker = getCurrentJobSeekerEntity();
         ParsedCv parsedCv = parsedCvRepository
-                .findTopByJobSeeker_JobSeekerIdOrderByCreateAtDesc(jobSeeker.getJobSeekerId())
+                .findTopByJobSeeker_JobSeekerIdOrderByModifiedDateDescCreateAtDesc(jobSeeker.getJobSeekerId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "ParsedCv"));
 
         try {

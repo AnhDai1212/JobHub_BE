@@ -17,8 +17,10 @@ import com.daita.datn.services.JobService;
 import com.daita.datn.services.CandidateChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -95,16 +97,19 @@ public class JobController {
     }
 
     @PostMapping("/recommended")
-    public ApiResponse<PageListDTO<JobDTO>> recommendJobs(
+    public ResponseEntity<ApiResponse<PageListDTO<JobDTO>>> recommendJobs(
             @RequestBody BaseSearchDTO<Void> request
     ) {
         PageListDTO<JobDTO> jobs = jobService.recommendJobs(request);
-        return ApiResponse.<PageListDTO<JobDTO>>builder()
+        ApiResponse<PageListDTO<JobDTO>> response = ApiResponse.<PageListDTO<JobDTO>>builder()
                 .code(HttpStatus.OK.value())
                 .status(HttpStatus.OK.getReasonPhrase())
                 .message(MessageConstant.JOB_LIST_SUCCESS)
                 .data(jobs)
                 .build();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(response);
     }
 
     @PatchMapping("/{jobId}")
@@ -167,7 +172,7 @@ public class JobController {
     @PreAuthorize("hasRole('RECRUITER')")
     public ApiResponse<PageListDTO<ApplicationDTO>> getApplications(
             @PathVariable Integer jobId,
-            @RequestBody BaseSearchDTO<Void> request
+            @RequestBody(required = false) BaseSearchDTO<Void> request
     ) {
         PageListDTO<ApplicationDTO> applications = jobService.getApplicationsForJob(jobId, request);
 

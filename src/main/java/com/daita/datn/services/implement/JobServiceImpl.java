@@ -19,6 +19,7 @@ import com.daita.datn.models.dto.ApplicationHistoryDTO;
 import com.daita.datn.models.dto.ApplicationStatusUpdateRequest;
 import com.daita.datn.models.dto.JobApplicationsCountRequest;
 import com.daita.datn.models.dto.pagination.PageListDTO;
+import com.daita.datn.models.dto.pagination.PaginationDTO;
 import com.daita.datn.models.entities.Company;
 import com.daita.datn.models.entities.Job;
 import com.daita.datn.models.entities.Recruiter;
@@ -63,6 +64,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -211,9 +213,40 @@ public class JobServiceImpl implements JobService {
     @Override
     @Transactional(readOnly = true)
     public PageListDTO<JobDTO> searchPublicJobs(BaseSearchDTO<JobFilterDTO> request) {
+        PaginationDTO pagination = request != null ? request.getPagination() : null;
+        if (pagination == null) {
+            pagination = new PaginationDTO(0, 20);
+        }
+
+        boolean sortByApplications = request != null
+                && request.getSortedBy() != null
+                && request.getSortedBy().stream()
+                .anyMatch(sort -> "applicationsCount".equalsIgnoreCase(sort.getField()));
+
+        if (sortByApplications) {
+            List<String> statuses = null;
+            JobFilterDTO filter = request.getFilter();
+            if (filter != null && filter.getStatuses() != null) {
+                List<String> normalized = filter.getStatuses().stream()
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .filter(value -> !value.isBlank())
+                        .map(String::toUpperCase)
+                        .toList();
+                if (!normalized.isEmpty()) {
+                    statuses = normalized;
+                }
+            }
+
+            Pageable pageable = PageRequest.of(pagination.getPage(), pagination.getPageSize());
+            Page<Job> page = jobRepository.findMostAppliedJobs(statuses, pageable);
+            List<JobDTO> rows = jobMapper.toDtoList(page.getContent());
+            return new PageListDTO<>(rows, (int) page.getTotalElements());
+        }
+
         Pageable pageable = Util.toPageable(
                 request.getSortedBy(),
-                request.getPagination(),
+                pagination,
                 Constant.JOB_SORT_FIELDS
         );
 
@@ -281,32 +314,63 @@ public class JobServiceImpl implements JobService {
 
         CvText cvText = buildCvTextWithSource(jobSeeker);
 
-        String sql = "SELECT j.job_id, "
-                + "  ( "
-                + "    0.6 * IFNULL(MATCH(j.title, j.description) AGAINST (:cvText IN NATURAL LANGUAGE MODE), 0) "
-                + "    + 0.3 * IFNULL(skill_match.score, 0) "
-                + "    + 0.1 * IFNULL(pop.score, 0) "
-                + "  ) AS score "
-                + "FROM jobs j "
-                + "LEFT JOIN ( "
-                + "  SELECT jtm.job_id, COUNT(*) AS score "
-                + "  FROM job_tag_mapping jtm "
-                + "  JOIN job_tags jt ON jt.tag_id = jtm.tag_id "
-                + "  JOIN candidate_skills cs ON cs.job_seeker_id = :jobSeekerId "
-                + "    AND LOWER(cs.skill_name) = LOWER(jt.tag_name) "
-                + "  GROUP BY jtm.job_id "
-                + ") skill_match ON skill_match.job_id = j.job_id "
-                + "LEFT JOIN ( "
-                + "  SELECT t.job_id, COUNT(*) AS score "
-                + "  FROM ( "
-                + "    SELECT job_id FROM applications "
-                + "    UNION ALL "
-                + "    SELECT job_id FROM favorites "
-                + "  ) t "
-                + "  GROUP BY t.job_id "
-                + ") pop ON pop.job_id = j.job_id "
-                + "WHERE j.status = 'OPEN' "
-                + "ORDER BY score DESC, j.create_date DESC "
+        String sql = "SELECT ranked.job_id, ranked.score "
+                + "FROM ( "
+                + "  SELECT j.job_id, "
+                + "    IFNULL(skill_match.score, 0) AS skill_score, "
+                + "    IFNULL(MATCH(j.title, j.description) AGAINST (:cvText IN NATURAL LANGUAGE MODE), 0) AS text_score, "
+                + "    IFNULL(pop.score, 0) AS pop_score, "
+                + "    ( "
+                + "      0.6 * IFNULL(skill_match.score, 0) "
+                + "      + 0.3 * IFNULL(MATCH(j.title, j.description) AGAINST (:cvText IN NATURAL LANGUAGE MODE), 0) "
+                + "      + 0.1 * IFNULL(pop.score, 0) "
+                + "    ) AS score "
+                + "  FROM jobs j "
+                + "  LEFT JOIN ( "
+                + "    SELECT js.job_id, COUNT(DISTINCT js.skill) AS score "
+                + "    FROM ( "
+                + "      SELECT jtm.job_id, LOWER(jt.tag_name) AS skill "
+                + "      FROM job_tag_mapping jtm "
+                + "      JOIN job_tags jt ON jt.tag_id = jtm.tag_id "
+                + "      UNION ALL "
+                + "      SELECT j.job_id, LOWER(jd.skill) AS skill "
+                + "      FROM jobs j "
+                + "      JOIN JSON_TABLE(COALESCE(j.parsed_jd_json, '{}'), '$.SKILLS[*]' "
+                + "        COLUMNS (skill VARCHAR(100) PATH '$') "
+                + "      ) jd "
+                + "    ) js "
+                + "    JOIN ( "
+                + "      SELECT LOWER(cs.skill_name) AS skill "
+                + "      FROM candidate_skills cs "
+                + "      WHERE cs.job_seeker_id = :jobSeekerId "
+                + "      UNION ALL "
+                + "      SELECT LOWER(cv.skill) AS skill "
+                + "      FROM ( "
+                + "        SELECT pc.parsed_json "
+                + "        FROM parsed_cvs pc "
+                + "        WHERE pc.job_seeker_id = :jobSeekerId "
+                + "        ORDER BY pc.modified_date DESC, pc.create_date DESC "
+                + "        LIMIT 1 "
+                + "      ) latest "
+                + "      JOIN JSON_TABLE(COALESCE(latest.parsed_json, '{}'), '$.SKILLS[*]' "
+                + "        COLUMNS (skill VARCHAR(100) PATH '$') "
+                + "      ) cv "
+                + "    ) cskills ON cskills.skill = js.skill "
+                + "    GROUP BY js.job_id "
+                + "  ) skill_match ON skill_match.job_id = j.job_id "
+                + "  LEFT JOIN ( "
+                + "    SELECT t.job_id, COUNT(*) AS score "
+                + "    FROM ( "
+                + "      SELECT job_id FROM applications "
+                + "      UNION ALL "
+                + "      SELECT job_id FROM favorites "
+                + "    ) t "
+                + "    GROUP BY t.job_id "
+                + "  ) pop ON pop.job_id = j.job_id "
+                + "  WHERE j.status = 'OPEN' "
+                + ") ranked "
+                + "WHERE ranked.skill_score > 0 OR ranked.text_score > 0 "
+                + "ORDER BY ranked.score DESC "
                 + "LIMIT :limit OFFSET :offset";
 
         Map<String, Object> params = new HashMap<>();
@@ -352,12 +416,21 @@ public class JobServiceImpl implements JobService {
             scoredJobs.add(new ScoredJob(job, combinedScore));
         }
 
-        scoredJobs.sort(Comparator.comparingDouble(ScoredJob::score).reversed()
-                .thenComparing(scored -> scored.job().getCreateAt(),
-                        Comparator.nullsLast(Comparator.reverseOrder())));
+        scoredJobs.sort(Comparator.comparingDouble(ScoredJob::score).reversed());
 
         List<Job> orderedJobs = scoredJobs.stream().map(ScoredJob::job).toList();
         List<JobDTO> dtos = jobMapper.toDtoList(orderedJobs);
+        Map<Integer, Double> scoreMap = new HashMap<>();
+        for (ScoredJob scored : scoredJobs) {
+            if (scored.job() != null && scored.job().getJobId() != null) {
+                scoreMap.put(scored.job().getJobId(), scored.score());
+            }
+        }
+        for (JobDTO dto : dtos) {
+            if (dto.getJobId() != null) {
+                dto.setRecommendScore(scoreMap.get(dto.getJobId()));
+            }
+        }
         int total = (int) jobRepository.count((root, query, cb) ->
                 cb.equal(root.get("status"), JobStatus.OPEN.name()));
         return new PageListDTO<>(dtos, total);
@@ -453,6 +526,13 @@ public class JobServiceImpl implements JobService {
 
         jobRepository.findByJobIdAndRecruiter_RecruiterId(jobId, recruiter.getRecruiterId())
                 .orElseThrow(() -> new AppException(ErrorCode.RESOURCE_NOT_FOUND, "Job"));
+
+        if (request == null) {
+            request = new BaseSearchDTO<>();
+            request.setPagination(new PaginationDTO(0, 10));
+        } else if (request.getPagination() == null) {
+            request.setPagination(new PaginationDTO(0, 10));
+        }
 
         Pageable pageable = Util.toPageable(
                 request.getSortedBy(),
@@ -726,6 +806,18 @@ public class JobServiceImpl implements JobService {
 
         List<Predicate> predicates = new ArrayList<>();
 
+        if (filter.getStatuses() != null && !filter.getStatuses().isEmpty()) {
+            List<String> statuses = filter.getStatuses().stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(value -> !value.isBlank())
+                    .map(String::toUpperCase)
+                    .toList();
+            if (!statuses.isEmpty()) {
+                predicates.add(cb.upper(root.get("status")).in(statuses));
+            }
+        }
+
         if (filter.getLocations() != null && !filter.getLocations().isEmpty()) {
             List<String> locations = filter.getLocations().stream()
                     .filter(Objects::nonNull)
@@ -777,7 +869,7 @@ public class JobServiceImpl implements JobService {
 
     private CvText buildCvTextWithSource(JobSeeker jobSeeker) {
         ParsedCv parsedCv = parsedCvRepository
-                .findTopByJobSeeker_JobSeekerIdOrderByCreateAtDesc(jobSeeker.getJobSeekerId())
+                .findTopByJobSeeker_JobSeekerIdOrderByModifiedDateDescCreateAtDesc(jobSeeker.getJobSeekerId())
                 .orElse(null);
 
         if (parsedCv != null && parsedCv.getExtractedText() != null && !parsedCv.getExtractedText().isBlank()) {
